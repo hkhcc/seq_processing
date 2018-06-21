@@ -13,6 +13,9 @@ from PyQt5.QtCore import pyqtSlot, QThread
 
 import autoprimer
 
+import setup_proxy
+setup_proxy.set_proxy()
+
 class App(QMainWindow):
 
     def __init__(self):

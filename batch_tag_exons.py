@@ -9,6 +9,9 @@ import glob
 import os
 import sys
 
+import setup_proxy
+setup_proxy.set_proxy()
+
 if len(sys.argv) != 4:
     print('usage: batch_tag_exons.py [PATH_TO_AB1_FOLDER] [GENE] [TRANSCRIPT]')
 else:
