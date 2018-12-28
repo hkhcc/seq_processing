@@ -69,7 +69,7 @@ def reverse_complement(input_abi_dict):
     rc_abi_dict['quality'] = input_abi_dict['quality'][::-1]
     return rc_abi_dict
 
-def align_ABI(abi_dict, cds_seqs):
+def align_ABI(abi_dict, cds_seqs, exon_cds_start):
     ''' perform local alignment to find matching segments '''
     abi_seq = ''.join(abi_dict['bases'])
     per_exon_alignment = list()
@@ -78,7 +78,8 @@ def align_ABI(abi_dict, cds_seqs):
             per_exon_alignment.append({'exon': i,
                                    'abi': '',
                                    'cds': '',
-                                   'score': 0
+                                   'score': 0,
+                                   'cds_start': exon_cds_start[i-1]
                                    })
             continue
         alignments = pairwise2.align.localms(abi_seq, cds_seq, 1, -2, -5, -2)
@@ -88,11 +89,13 @@ def align_ABI(abi_dict, cds_seqs):
         per_exon_alignment.append({'exon': i,
                                    'abi': abi_aligned,
                                    'cds': cds_aligned,
-                                   'score': alignment_score
+                                   'score': alignment_score,
+                                   'cds_start': exon_cds_start[i-1]
                                    })
     return per_exon_alignment
 
-def generate_annotation_symbols(actual_sequence, reference_sequence, cds_flank, exon_number):
+def generate_annotation_symbols(actual_sequence, reference_sequence, cds_flank,
+                                exon_number, exon_cds_start, cds_tick_interval=5):
     symbols = list()
     non_gap_length = len(str(reference_sequence).replace('-', ''))
     head_flank_start = 1
@@ -101,7 +104,8 @@ def generate_annotation_symbols(actual_sequence, reference_sequence, cds_flank, 
     tail_flank_start = non_gap_length - cds_flank + 1
     tail_flank_end = non_gap_length
     print('# -' + str(cds_flank) + ':', tail_flank_start, tail_flank_end, file=sys.stderr)
-    cds_base_count = 0
+    this_cds_base_count = 0
+    cds_count = exon_cds_start
     if len(actual_sequence) != len(reference_sequence):
         raise ValueError('Aligned sequences not equal in length!')
     for actual_base, reference_base in zip(actual_sequence, reference_sequence):
@@ -110,29 +114,42 @@ def generate_annotation_symbols(actual_sequence, reference_sequence, cds_flank, 
             raise ValueError('Alignment error. Check pairwise alignment output.')
         if actual_base == '-' and reference_base != '-':
             # possible deletion
-            cds_base_count += 1
+            this_cds_base_count += 1
+            # this is for handling a CDS region deletion (as it is not handled later)
+            if head_flank_end < this_cds_base_count < tail_flank_start:
+                cds_count += 1
             symbols.append('d')
+            print('::DEBUG::')
+            print(this_cds_base_count, cds_count, actual_base, reference_base)
         if reference_base == '-' and actual_base != '-':
             # either a base not covered by reference, or an insertion
             symbols.append('.')
         if actual_base != '-' and reference_base != '-':
             # a successfully aligned base
-            cds_base_count += 1
-            if head_flank_start <= cds_base_count <= head_flank_end:
+            this_cds_base_count += 1
+            if head_flank_start <= this_cds_base_count <= head_flank_end:
                 if actual_base != str(reference_base).upper():
                     symbols.append('!')
                 else:
                     symbols.append('-')
-            elif tail_flank_start <= cds_base_count <= tail_flank_end:
+            elif tail_flank_start <= this_cds_base_count <= tail_flank_end:
                 if actual_base != str(reference_base).upper():
                     symbols.append('!')
                 else:
                     symbols.append('+')
             else:
+                # inside the CDS region of the exon
+                cds_count += 1 # this is 1-based; minus 1 when printing
                 if actual_base != str(reference_base).upper():
-                    symbols.append('!')
+                    if (cds_count - 1) == 1 or (cds_count - 1) % cds_tick_interval == 0:
+                        symbols.append('!' + ' c.' + str(cds_count - 1))
+                    else:
+                        symbols.append('!')
                 else:
-                    symbols.append('E' + str(exon_number))
+                    if (cds_count - 1) == 1 or (cds_count - 1) % cds_tick_interval == 0:
+                        symbols.append('E' + str(exon_number) + ' c.' + str(cds_count - 1))
+                    else:
+                        symbols.append('E' + str(exon_number))
 
     print('>aligned|actual_sequence')
     print(actual_sequence)
@@ -254,7 +271,8 @@ def annotate_ABI(abi_dict, per_exon_alignment, score_threshold=SCORE_THRESHOLD,
             print('# Annotation will be performed', file=sys.stderr)
             print("# abi_dict['bases']=", len(abi_dict['bases']), file=sys.stderr)
             print("# exon['abi'] non gap =", len(str(exon['abi']).replace('-', '')), file=sys.stderr)
-            annotation_symbols = generate_annotation_symbols(exon['abi'], exon['cds'], CDS_FLANK, i+1)
+            annotation_symbols = generate_annotation_symbols(exon['abi'], exon['cds'], CDS_FLANK,
+                                                             exon['exon'], exon['cds_start'])
             base_count = 0
             for j, base in enumerate(exon['abi']):
                 if base == '-':
@@ -425,9 +443,12 @@ if __name__ == '__main__':
     exons = this_gene.list_exon_regions()
     coding_regions = [this_gene.exon_to_translated(er) for er in exons]
     cds_seqs = list()
+    cds_pos_count = 1
+    exon_cds_start = list() # this is the lowest c. number in the exon
     for cds in coding_regions:
         if cds[1] is None or cds[2] is None:
             cds_seqs.append(None)
+            exon_cds_start.append(cds_pos_count)
             continue
         upstream, downstream = get_flanking_regions(cds, flank=CDS_FLANK)
         coreseq = cds
@@ -435,15 +456,17 @@ if __name__ == '__main__':
                            get_sequence(coreseq) +
                            get_sequence(downstream))
         cds_seqs.append(flanked_cds_seq)
+        exon_cds_start.append(cds_pos_count)
+        cds_pos_count += len(get_sequence(coreseq))
 
     print('# Now converting file...', file=sys.stderr)
     abi_dict = parse_ABI(abi_path)
     print('# Now performing alignment for forward strand...', file=sys.stderr)
-    alignment_dict = align_ABI(abi_dict, cds_seqs)
+    alignment_dict = align_ABI(abi_dict, cds_seqs, exon_cds_start)
     print('# Reverse complementation...', file=sys.stderr)
     abi_dict_rc = reverse_complement(abi_dict)
     print('# Now performing alignment for reverse strand...', file=sys.stderr)
-    alignment_dict_rc = align_ABI(abi_dict_rc, cds_seqs)
+    alignment_dict_rc = align_ABI(abi_dict_rc, cds_seqs, exon_cds_start)
 
     annotated_ABI = None
     rc_status = None

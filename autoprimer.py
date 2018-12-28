@@ -17,8 +17,8 @@ import urllib.parse
 import urllib.request
 
 debug = False
-version = '1.0g build 20180502'
-message = 'Updated batch submission mode'
+version = '1.0h build 20181102'
+message = 'Fixed a bug in the Gene() class which causes errors for tRNA genes'
 
 def print_disclaimer():
     """Print disclaimer at exit"""
@@ -556,7 +556,11 @@ class Gene:
 
     def exon_to_translated(self, exon_region):
         """Return the translated region of the exon"""
-        t_start, t_end = self.list_translation_boundaries()
+        if 'Translation' in self.transcript_info: # bug fix on 2018-11-02
+            t_start, t_end = self.list_translation_boundaries()
+        else:
+            print('# Untranslated exon.', file=sys.stderr)
+            t_start, t_end = exon_region[1], exon_region[2]
         e_start, e_end = exon_region[1], exon_region[2]
         new_start, new_end = e_start, e_end
         if self.transcript_info['strand'] == 1:
@@ -903,7 +907,7 @@ def main(args):
                     fp.append(p[0])
                     rp.append(p[1])
                 autoSNPfree(pair_name, fp, rp, default_server, batch_mode=True)
-                pair_name, fp, rp = None, None, None                
+                pair_name, fp, rp = None, None, None
                 #####
                 for p in primers:
                     pair_name = sequence_id + '_' + str(primer_count)
