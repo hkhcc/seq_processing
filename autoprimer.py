@@ -17,8 +17,8 @@ import urllib.parse
 import urllib.request
 
 debug = False
-version = '1.0h build 20181102'
-message = 'Fixed a bug in the Gene() class which causes errors for tRNA genes'
+version = '1.0i build 20191231'
+message = 'Updated the Gene() class to allow an internal choice of GRCh37/38, and bug fixes'
 
 def print_disclaimer():
     """Print disclaimer at exit"""
@@ -509,14 +509,25 @@ def combine_adj_regions(translated_regions, translated_region_names, chunk=800):
 
 class Gene:
     """Base container for genetic information from Ensembl"""
-    def __init__(self, name):
+    def __init__(self, name, version='GRCh38'):
         self.name = str(name).upper()
+        if version == 'GRCh38':
+            self.genome_version = 'GRCh38'
+        elif version == 'GRCh37':
+            self.genome_version = 'GRCh37'
+        else:
+            raise ValueError(version + ' is not a supported human genome version!')
+        print('Now downloading data for', self.genome_version,
+              'Gene:', self.name, file=sys.stderr)
         self.get_gene_info()
-        self.set_transcript(self.name)
+        print('Finished loading data.', file=sys.stderr)
 
     def get_gene_info(self):
         """Get gene info from Ensembl"""
-        base_url = 'http://rest.ensembl.org/lookup/symbol/homo_sapiens/'
+        if self.genome_version == 'GRCh37':
+            base_url = 'http://grch37.rest.ensembl.org/lookup/symbol/homo_sapiens/'
+        elif self.genome_version == 'GRCh38':
+            base_url = 'http://rest.ensembl.org/lookup/symbol/homo_sapiens/'
         url = base_url + str(self.name).upper() + '?content-type=application/json;expand=1'
         gene_info = jget(url)
         self.gene_info= gene_info
@@ -538,7 +549,9 @@ class Gene:
                 self.transcript_info = t
                 self.transcript_name = transcript_name
                 self.transcript_id = t['id']
-        return transcript_name + ' set as working transcript'
+                print(transcript_name + ' set as working transcript', file=sys.stderr)
+                return
+        raise ValueError(transcript_name + ' not found!')
 
     def list_exon_regions(self):
         """Return the exonic regions in self.transcript_info"""
@@ -743,7 +756,7 @@ def main(args):
         auto_cut_chunk = 800
         auto_combine_chunk = 900
     else:
-        raise ValueError('Amplicon size setting cannot be', amplicon)
+        raise ValueError('Amplicon size setting cannot be' + str(amplicon))
 
     ###########################################################################
 
@@ -757,7 +770,7 @@ def main(args):
 
     g = Gene(gene)
     print(g.list_transcripts(), file=sys.stderr)
-    print(g.set_transcript(transcript), file=sys.stderr)
+    g.set_transcript(transcript)
     print(g.transcript_id)
 
     print('# Now retrieving exon information...', file=sys.stderr)
