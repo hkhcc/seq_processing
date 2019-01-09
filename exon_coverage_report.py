@@ -28,7 +28,7 @@ CDS_FLANK = 20
 def cal_coverage(chromosome, start, end, bam_file, max_depth=MAX_DEPTH,min_phred=20, min_mapq=20):
     """Return the output from samtools depth"""
     run_samtools = subprocess.run(['samtools', 'depth',
-                                   '-a', 
+                                   '-aa', 
                                    '-r', 'chr' + str(chromosome) + ':' + str(start) + '-' + str(end),
                                    '-d', str(max_depth),
                                    '-q', str(min_phred),
