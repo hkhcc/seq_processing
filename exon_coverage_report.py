@@ -4,10 +4,11 @@ This script reports the per-position coverage of a gene.
 
 Input -
 1. Path to indexed BAM file
-2. Transcript name (e.g. ATP7B-201)
+2. Gene name or transcript id (e.g. BRCA1, ATP7B-201)
 
 Output -
-1. Per-exon coverage report.
+1. Multi-page PDF report in the same directory as the BAM file.
+
 """
 import os
 import re
@@ -16,6 +17,8 @@ import sys
 
 import numpy as np
 import matplotlib.pyplot as plt
+
+from matplotlib.backends.backend_pdf import PdfPages
 
 from autoprimer import Gene, get_flanking_regions
 
@@ -54,77 +57,97 @@ def parse_coverage(samtools_depth_output, min_depth=20):
     return (all_pos, failed_pos)
 
 def main():
-    if len(sys.argv) != 3:
-        print('Usage: exon_coverage_report.py [BAM_PATH] [TRANSCRIPT_NAME]')
+    if len(sys.argv) < 3:
+        print('Usage: exon_coverage_report.py [BAM_PATH] [GENE_NAME_1 or TRANSCRIPT_ID_1] [GENE_NAME_2 or TRANSCRIPT_ID_2]...')
         sys.exit()
     # check that the BAM path exists
     assert os.path.isfile(sys.argv[1]), "BAM_PATH not valid!"
-    # assume transcript name is something meaningful
-    assert len(sys.argv[2].split('-')) == 2, "Valid transcript name must be in the fomrat [GENE]-[digits]"
-    # now retrieve gene info
-    gene_name, transcript_number = sys.argv[2].split('-')
-    g = Gene(gene_name, version='GRCh37') # we need GRCh37 for hg19 coordinates
-    # set the transcript
-    g.set_transcript(sys.argv[2])
-    # generate the list of coordinates
-    exons = g.list_exon_regions()
-    cdss = [g.exon_to_translated(exon) for exon in exons]
-    rois = list()
-    for cds in cdss:
-        if cds[1] is None or cds[2] is None:
-            rois.append(None)
-            continue
-        head, tail = get_flanking_regions(cds, flank=CDS_FLANK)
-        rois.append([head, cds, tail])
-
-    # determine the coverage for each region
-    coverage_report = dict()
-    coverage_report['BAM_PATH'] = sys.argv[1]
-    coverage_report['CDS_FLANK'] = CDS_FLANK
-    x_ticks_pos, x_ticks_label = list(), list()
-    for i, roi in enumerate(rois, 1):
-        coverage_report['Exon ' + str(i)] = list()
-        if roi is None:
-            print('Exon', i, 'has nothing to report!', file=sys.stderr)
-            continue
-        for label, segment in zip(['head', 'body', 'tail'], roi): # each roi has three segments: head, body, tail
-            Chr = segment[0]
-            start = segment[1]
-            end = segment[2]
-            coverage = cal_coverage(Chr, start, end, sys.argv[1])
-            all_pos, failed_pos = parse_coverage(coverage, min_depth=MIN_ROI_COVERAGE)
-            coverage_report['Exon ' + str(i)].append([start, end, all_pos, failed_pos])
-            print('Exon', i, label, 'pass rate=', 1 - len(failed_pos)/len(all_pos), file=sys.stderr)
-            print('Min. coverage:', min([p[2] for p in all_pos]), file=sys.stderr)
-            if len(failed_pos) > 0:
-                color = 'red'
+    with PdfPages(sys.argv[1] + '.coverage.pdf') as pdf:
+        # now process the target GENE_NAME or TRANSCRIPT_ID
+        for target in sys.argv[2:]:
+            # assume gene name or transcript name is something meaningful
+            target_type = None
+            if '-' in target:
+                assert len(target.split('-')) == 2, "TRANSCRIPT_ID not valid!"
+                target_type = 'transcript'
             else:
-                color = 'cyan'
-            if label == 'head':
-                plt.bar(i-0.25, np.max([p[2] for p in all_pos]), width=0.25, color='white', edgecolor='black', label="5' flank")
-                plt.bar(i-0.25, np.average([p[2] for p in all_pos]), width=0.25, color=color, edgecolor='black', label="5' flank")
-                plt.bar(i-0.25, np.min([p[2] for p in all_pos]), width=0.25, color='black', alpha=0.8, edgecolor='black', label="5' flank")
-            elif label == 'body':
-                plt.bar(i, np.max([p[2] for p in all_pos]), width=0.25, color='white', edgecolor='black', label='CDS')
-                plt.bar(i, np.average([p[2] for p in all_pos]), width=0.25, color=color, edgecolor='black', label='CDS')
-                plt.bar(i, np.min([p[2] for p in all_pos]), width=0.25, color='black', alpha=0.8, edgecolor='black', label='CDS')
-            elif label == 'tail':
-                plt.bar(i+0.25, np.max([p[2] for p in all_pos]), width=0.25, color='white', edgecolor='black', label="3' flank")
-                plt.bar(i+0.25, np.average([p[2] for p in all_pos]), width=0.25, color=color, edgecolor='black', label="3' flank")
-                plt.bar(i+0.25, np.min([p[2] for p in all_pos]), width=0.25, color='black', alpha=0.8, edgecolor='black', label="3' flank")
-            x_ticks_pos.append(i)
-            x_ticks_label.append('E' + str(i))
-    plt.ylabel('Sequencing coverage (folds)')
-    plt.yscale('log')
-    y_ticks = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
-    y_ticks.append(MIN_ROI_COVERAGE)
-    plt.yticks(ticks=y_ticks, labels=y_ticks)
-    plt.xlabel('Exon number')
-    plt.xticks(ticks=x_ticks_pos, labels=x_ticks_label)
-    plt.axhline(y=MIN_ROI_COVERAGE, color='green', linestyle='--')
-    plt.title(sys.argv[2] + ' coverage report\n Sample: ' + os.path.basename(sys.argv[1]) +
-              ' Min. depth threshold:' + str(MIN_ROI_COVERAGE) + 'x')
-    plt.show()
+                target_type = 'gene'
+            
+            # now retrieve gene info
+            if target_type == 'transcript':
+                gene_name, transcript_number = target.split('-')
+                g = Gene(gene_name, version='GRCh37') # we need GRCh37 for hg19 coordinates
+                g.set_transcript(target)
+            elif target_type == 'gene':
+                gene_name = target
+                g = Gene(gene_name, version='GRCh37')
+                g.set_transcript()
+            else:
+                raise NotImplementedError
+        
+            # generate the list of coordinates
+            exons = g.list_exon_regions()
+            cdss = [g.exon_to_translated(exon) for exon in exons]
+            rois = list()
+            for cds in cdss:
+                if cds[1] is None or cds[2] is None:
+                    rois.append(None)
+                    continue
+                head, tail = get_flanking_regions(cds, flank=CDS_FLANK)
+                rois.append([head, cds, tail])
+        
+            # determine the coverage for each region
+            coverage_report = dict()
+            coverage_report['BAM_PATH'] = sys.argv[1]
+            coverage_report['CDS_FLANK'] = CDS_FLANK
+            plt.figure(figsize=(8,6))
+            x_ticks_pos, x_ticks_label = list(), list()
+            for i, roi in enumerate(rois, 1):
+                coverage_report['Exon ' + str(i)] = list()
+                if roi is None:
+                    print('Exon', i, 'has nothing to report!', file=sys.stderr)
+                    continue
+                for label, segment in zip(['head', 'body', 'tail'], roi): # each roi has three segments: head, body, tail
+                    Chr = segment[0]
+                    start = segment[1]
+                    end = segment[2]
+                    coverage = cal_coverage(Chr, start, end, sys.argv[1])
+                    all_pos, failed_pos = parse_coverage(coverage, min_depth=MIN_ROI_COVERAGE)
+                    coverage_report['Exon ' + str(i)].append([start, end, all_pos, failed_pos])
+                    print('Exon', i, label, 'pass rate=', 1 - len(failed_pos)/len(all_pos), file=sys.stderr)
+                    print('Min. coverage:', min([p[2] for p in all_pos]), file=sys.stderr)
+                    if len(failed_pos) > 0:
+                        color = 'red'
+                    else:
+                        color = 'cyan'
+                    if label == 'head':
+                        plt.bar(i-0.25, np.max([p[2] for p in all_pos]), width=0.25, color='white', edgecolor='black', label="5' flank")
+                        plt.bar(i-0.25, np.average([p[2] for p in all_pos]), width=0.25, color=color, edgecolor='black', label="5' flank")
+                        plt.bar(i-0.25, np.min([p[2] for p in all_pos]), width=0.25, color='black', alpha=0.8, edgecolor='black', label="5' flank")
+                    elif label == 'body':
+                        plt.bar(i, np.max([p[2] for p in all_pos]), width=0.25, color='white', edgecolor='black', label='CDS')
+                        plt.bar(i, np.average([p[2] for p in all_pos]), width=0.25, color=color, edgecolor='black', label='CDS')
+                        plt.bar(i, np.min([p[2] for p in all_pos]), width=0.25, color='black', alpha=0.8, edgecolor='black', label='CDS')
+                    elif label == 'tail':
+                        plt.bar(i+0.25, np.max([p[2] for p in all_pos]), width=0.25, color='white', edgecolor='black', label="3' flank")
+                        plt.bar(i+0.25, np.average([p[2] for p in all_pos]), width=0.25, color=color, edgecolor='black', label="3' flank")
+                        plt.bar(i+0.25, np.min([p[2] for p in all_pos]), width=0.25, color='black', alpha=0.8, edgecolor='black', label="3' flank")
+                    x_ticks_pos.append(i)
+                    x_ticks_label.append('E' + str(i))
+            plt.ylabel('Sequencing coverage (folds)')
+            plt.yscale('log')
+            y_ticks = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+            y_ticks.append(MIN_ROI_COVERAGE)
+            plt.yticks(ticks=y_ticks, labels=y_ticks)
+            plt.xlabel('Exon number')
+            plt.xticks(ticks=x_ticks_pos, labels=x_ticks_label)
+            plt.axhline(y=MIN_ROI_COVERAGE, color='green', linestyle='--')
+            plt.title(g.transcript_name + ' coverage report\n Sample: ' + os.path.basename(sys.argv[1]) +
+                      ' Min. depth threshold:' + str(MIN_ROI_COVERAGE) + 'x')
+            plt.tight_layout()
+            pdf.savefig()
+            plt.close()
+    
 if __name__ == '__main__':
     main()
 

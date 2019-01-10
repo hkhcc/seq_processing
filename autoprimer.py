@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Aug 11 17:23:31 2017
-
 @author: HCC604
 """
 import atexit
@@ -17,8 +16,8 @@ import urllib.parse
 import urllib.request
 
 debug = False
-version = '1.0i build 20191231'
-message = 'Updated the Gene() class to allow an internal choice of GRCh37/38, and bug fixes'
+version = '1.0j build 20190110'
+message = 'Updated the Gene() class to allow automatic transcript selection, and bug fixes'
 
 def print_disclaimer():
     """Print disclaimer at exit"""
@@ -540,18 +539,30 @@ class Gene:
             transcripts.append(t['display_name'])
         return transcripts
 
-    def set_transcript(self, transcript_name):
+    def set_transcript(self, transcript_name=None):
         """Set the preferred transcript"""
         self.transcript_info = None
         self.transcript_name = None
-        for t in self.gene_info['Transcript']:
-            if t['display_name'] == transcript_name:
-                self.transcript_info = t
-                self.transcript_name = transcript_name
-                self.transcript_id = t['id']
-                print(transcript_name + ' set as working transcript', file=sys.stderr)
-                return
-        raise ValueError(transcript_name + ' not found!')
+        # if no transcript name provided, defaults to the canonical transcript
+        if transcript_name is None:
+            for t in self.gene_info['Transcript']:
+                if t['is_canonical'] == 1:
+                    self.transcript_info = t
+                    self.transcript_name = t['display_name']
+                    self.transcript_id = t['id']
+                    print(self.transcript_name + ' (canonical) set as working transcript', file=sys.stderr)
+                    return
+            raise ValueError('Canonical transcript not found!')
+        # otherwise, try to set working transcript as the supplied transcript
+        else:        
+            for t in self.gene_info['Transcript']:
+                if t['display_name'] == transcript_name:
+                    self.transcript_info = t
+                    self.transcript_name = transcript_name
+                    self.transcript_id = t['id']
+                    print(self.transcript_name + ' set as working transcript', file=sys.stderr)
+                    return
+            raise ValueError(transcript_name + ' not found!')
 
     def list_exon_regions(self):
         """Return the exonic regions in self.transcript_info"""
@@ -965,6 +976,3 @@ def main(args):
 
 if __name__ == '__main__':
     main(sys.argv)
-
-
-
