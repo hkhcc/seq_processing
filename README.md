@@ -17,4 +17,13 @@ Python 3.7.0 (default, Aug 14 2018, 19:12:50) [MSC v.1900 32 bit (Intel)] :: Ana
 Type "help", "copyright", "credits" or "license" for more information.
 >>>
 ```
-
+You may then try to run the individual scripts. Running the scripts with no arguments provided displays a (hopefully informative) help message:
+```
+C:\Users\COMPUTER_USER\Documents\Scripts\seq_processing>python build_bed_file.py
+usage: build_bed_file.py [-h] [-f CDS_FLANK] transcripts [transcripts ...]
+build_bed_file.py: error: the following arguments are required: transcripts
+# AutoPrimer program by Tom C.C. Ho (c) 2017
+# Version 1.0j build 20190110
+# Release note: Updated the Gene() class to allow automatic transcript selection, and bug fixes
+```
+Note that, in Linux, ```python``` should probably be replace by ```python3``` or similar.
