@@ -86,7 +86,7 @@ def autoSNPfree(pair_name, fp, rp, server, max_wait=1200, batch_mode=False):
         if server == 'HKU':
             result_url = 'http://grass.cgs.hku.hk/SNPfree/view.php?jobid='
         if server == 'PYN':
-            result_url = 'http://223.197.142.243:8082/pyneh/SNPfree/view.php?jobid='
+            result_url = 'http://223.197.142.243:8082/SNPfree/view.php?jobid='
         ready = False
         # wait for the result
         waited = 0
@@ -261,7 +261,7 @@ def webix_get_snps(chrom, start, end, server):
     if server == 'HKU':
         base_url = 'http://grass.cgs.hku.hk/SNPfree/webix.php?'
     if server == 'PYN':
-        base_url = 'http://223.197.142.243:8082/pyneh/SNPfree/webix.php?'
+        base_url = 'http://223.197.142.243:8082/SNPfree/webix.php?'
     url = base_url + 'chr=' + str(chrom) + '&'
     url += 'start=' + str(start) + '&'
     url += 'end=' + str(end) + '&'
@@ -279,7 +279,7 @@ def wrimer3(seq_id, seq, target, server, min_prod=100, max_prod=1200):
     if server == 'HKU':
         base_url = 'http://grass.cgs.hku.hk/SNPfree/wrimer3.php?'
     if server == 'PYN':
-        base_url = 'http://223.197.142.243:8082/pyneh/AutoPrimer/wrimer3.php?'
+        base_url = 'http://223.197.142.243:8082/AutoPrimer/wrimer3.php?'
     url = base_url + 'sequence_id=' + str(seq_id) + '&'
     url += 'sequence_template=' + str(seq) + '&'
     url += 'sequence_target=' + str(target) + '&'
@@ -650,7 +650,7 @@ class PrimerPool:
 def check_servers():
     ''' Return a dictionary of server status '''
     hku_status = check_url('http://grass.cgs.hku.hk/SNPfree/')
-    pyn_status = check_url('http://223.197.142.243:8082/pyneh/SNPfree/')
+    pyn_status = check_url('http://223.197.142.243:8082/SNPfree/')
     rest_status = check_url('https://rest.ensembl.org/')
 
     status_dict = {'hku_status': hku_status,
