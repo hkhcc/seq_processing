@@ -17,7 +17,7 @@ import urllib.request
 
 debug = False
 version = '1.0k build 20190227'
-message = 'Updated the server settings'
+message = 'Updated SNPfree server settings'
 
 def print_disclaimer():
     """Print disclaimer at exit"""
