@@ -435,10 +435,12 @@ def multi_plot_ABI(abi_dict_chunks, pdf_object,
 if __name__ == '__main__':
     abi_path = sys.argv[1]
     # obtain coding +- 10 bp sequences for chromatogram annotation
-    gene_name = sys.argv[2]
+    print(sys.argv, file=sys.stderr)
+    gene_name, transcript_no = sys.argv[2].split('-')    
     this_gene = Gene(gene_name)
     print(this_gene.list_transcripts(), file=sys.stderr)
-    transcript = sys.argv[3]
+    assert transcript_no.isdigit() == True
+    transcript = gene_name + '-' + transcript_no
     print(this_gene.set_transcript(transcript), file=sys.stderr)
     exons = this_gene.list_exon_regions()
     coding_regions = [this_gene.exon_to_translated(er) for er in exons]
