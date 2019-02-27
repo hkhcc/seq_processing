@@ -261,9 +261,7 @@ def webix_get_snps(chrom, start, end, server):
     if server == 'HKU':
         base_url = 'http://grass.cgs.hku.hk/SNPfree/webix.php?'
     if server == 'PYN':
-        base_url = 'http://ebensee.hopto.org:8082/pyneh/SNPfree/webix.php?'
-    if server == 'CYK':
-        base_url = 'http://vonbismarck.hopto.org:8080/SNPfree/webix.php?'
+        base_url = 'http://223.197.142.243:8082/pyneh/SNPfree/webix.php?'
     url = base_url + 'chr=' + str(chrom) + '&'
     url += 'start=' + str(start) + '&'
     url += 'end=' + str(end) + '&'
@@ -281,9 +279,7 @@ def wrimer3(seq_id, seq, target, server, min_prod=100, max_prod=1200):
     if server == 'HKU':
         base_url = 'http://grass.cgs.hku.hk/SNPfree/wrimer3.php?'
     if server == 'PYN':
-        base_url = 'http://ebensee.hopto.org:8082/pyneh/AutoPrimer/wrimer3.php?'
-    if server == 'CYK':
-        base_url = 'http://vonbismarck.hopto.org:8080/AutoPrimer/wrimer3.php?'
+        base_url = 'http://223.197.142.243:8082/pyneh/AutoPrimer/wrimer3.php?'
     url = base_url + 'sequence_id=' + str(seq_id) + '&'
     url += 'sequence_template=' + str(seq) + '&'
     url += 'sequence_target=' + str(target) + '&'
@@ -654,13 +650,11 @@ class PrimerPool:
 def check_servers():
     ''' Return a dictionary of server status '''
     hku_status = check_url('http://grass.cgs.hku.hk/SNPfree/')
-    pyn_status = check_url('http://ebensee.hopto.org:8082/pyneh/SNPfree/')
-    cyk_status = check_url('http://vonbismarck.hopto.org:8080/SNPfree/')
+    pyn_status = check_url('http://223.197.142.243:8082/pyneh/SNPfree/')
     rest_status = check_url('https://rest.ensembl.org/')
 
     status_dict = {'hku_status': hku_status,
                    'pyn_status': pyn_status,
-                   'cyk_status': cyk_status,
                    'rest_status': rest_status
                    }
 
@@ -670,12 +664,10 @@ def select_server():
     server_status = check_servers()
     hku_status = server_status['hku_status']
     pyn_status = server_status['pyn_status']
-    cyk_status = server_status['cyk_status']
     rest_status = server_status['rest_status']
     print('Server status -', file=sys.stderr)
     print('HKU', hku_status, file=sys.stderr)
     print('PYNEH', pyn_status, file=sys.stderr)
-    print('CYK', cyk_status, file=sys.stderr)
     print('ENSEMBL', rest_status, file=sys.stderr)
 
     if rest_status == False:
@@ -686,16 +678,12 @@ def select_server():
         print('Choosing HKU-CGS server...', file=sys.stderr)
         server = 'HKU'
     else:
-        if cyk_status != False:
-            print('Choosing CYK (private) server...', file=sys.stderr)
-            server = 'CYK'
+        if pyn_status != False:
+            print('Choosing PYNEH server...', file=sys.stderr)
+            server = 'PYN'
         else:
-            if pyn_status != False:
-                print('Choosing PYNEH server...', file=sys.stderr)
-                server = 'PYN'
-            else:
-                print('All SNPfree servers down! Exiting...', file=sys.stderr)
-                return None
+            print('All SNPfree servers down! Exiting...', file=sys.stderr)
+            return None
     return server
 
 def main(args):
