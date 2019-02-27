@@ -22,7 +22,7 @@ def main():
         
     # load the gene list
     genes = []
-    with open(sys.argv[2]) as f:
+    with open(sys.argv[4]) as f:
         for line in f:
             if line.startswith('#'):
                 continue
@@ -32,7 +32,7 @@ def main():
     print('# Genes:', genes, file=sys.stderr)
     
     # execute exon_coverage_report
-    subprocess.run(['python3', 'exon_coverage_report.py', sys.argv[1:4]] + genes)
+    subprocess.run(['python3', 'exon_coverage_report.py', sys.argv[1], sys.argv[2], sys.argv[3]] + genes)
 
 if __name__ == '__main__':
     main()

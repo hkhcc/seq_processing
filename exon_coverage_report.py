@@ -96,13 +96,13 @@ def main():
                 if cds[1] is None or cds[2] is None:
                     rois.append(None)
                     continue
-                head, tail = get_flanking_regions(cds, flank=CDS_FLANK)
+                head, tail = get_flanking_regions(cds, flank=cds_flank_bp)
                 rois.append([head, cds, tail])
         
             # determine the coverage for each region
             coverage_report = dict()
             coverage_report['BAM_PATH'] = sys.argv[1]
-            coverage_report['CDS_FLANK'] = CDS_FLANK
+            coverage_report['CDS_FLANK'] = cds_flank_bp
             plt.figure(figsize=(8,6))
             x_ticks_pos, x_ticks_label = list(), list()
             for i, roi in enumerate(rois, 1):
