@@ -55,8 +55,6 @@ class App(QMainWindow):
             self.combobox_server.addItem('HKU')
         if str(server_status['pyn_status']) == '200':
             self.combobox_server.addItem('PYN')
-        if str(server_status['cyk_status']) == '200':
-            self.combobox_server.addItem('CYK')
 
         # buttons
         self.button_1 = QPushButton('Step 1: Retrieve Transcripts', self)
