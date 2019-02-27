@@ -16,8 +16,8 @@ import subprocess
 import sys
 
 def main():
-    if len(sys.argv) != 3:
-        print('Usage: gene_panel_coverage_report.py [BAM_PATH] [GENE_LIST_TXT]')
+    if len(sys.argv) != 5:
+        print('Usage: gene_panel_coverage_report.py [BAM_PATH] [MIN_ROI_COVERAGE] [CDS_FLANK_BP] [GENE_LIST_TXT]')
         sys.exit()
         
     # load the gene list
@@ -32,7 +32,7 @@ def main():
     print('# Genes:', genes, file=sys.stderr)
     
     # execute exon_coverage_report
-    subprocess.run(['python3', 'exon_coverage_report.py', sys.argv[1]] + genes)
+    subprocess.run(['python3', 'exon_coverage_report.py', sys.argv[1:4]] + genes)
 
 if __name__ == '__main__':
     main()

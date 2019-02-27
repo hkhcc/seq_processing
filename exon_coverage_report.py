@@ -24,9 +24,6 @@ from autoprimer import Gene, get_flanking_regions
 
 # the maximum coverage in the BAM file (too small a value can result in overflow)
 MAX_DEPTH = 1000000
-# other custom settings
-MIN_ROI_COVERAGE = 20
-CDS_FLANK = 20
 
 def cal_coverage(chromosome, start, end, bam_file, max_depth=MAX_DEPTH,min_phred=20, min_mapq=20):
     """Return the output from samtools depth"""
@@ -57,14 +54,20 @@ def parse_coverage(samtools_depth_output, min_depth=20):
     return (all_pos, failed_pos)
 
 def main():
-    if len(sys.argv) < 3:
-        print('Usage: exon_coverage_report.py [BAM_PATH] [GENE_NAME_1 or TRANSCRIPT_ID_1] [GENE_NAME_2 or TRANSCRIPT_ID_2]...')
+    if len(sys.argv) < 5:
+        print('Usage: exon_coverage_report.py [BAM_PATH] [MIN_ROI_COVERAGE] [CDS_FLANK_BP] [GENE_NAME_1 or TRANSCRIPT_ID_1] [GENE_NAME_2 or TRANSCRIPT_ID_2]...')
         sys.exit()
     # check that the BAM path exists
     assert os.path.isfile(sys.argv[1]), "BAM_PATH not valid!"
+    # check that the min_roi_coverage value is valid
+    assert sys.argv[2].isdigit() and int(sys.argv[2]) > 0, "MIN_ROI_COVERAGE is not valid!"
+    min_roi_coverage = int(sys.argv[2])
+    # check that cds_flank_bp is valid
+    assert sys.argv[3].isdigit() and int(sys.argv[3]) > 0, "CDS_FLANK_BP is not valid!"
+    cds_flank_bp = int(sys.argv[3])
     with PdfPages(sys.argv[1] + '.coverage.pdf') as pdf:
         # now process the target GENE_NAME or TRANSCRIPT_ID
-        for target in sys.argv[2:]:
+        for target in sys.argv[4:]:
             # assume gene name or transcript name is something meaningful
             target_type = None
             if '-' in target:
@@ -112,7 +115,7 @@ def main():
                     start = segment[1]
                     end = segment[2]
                     coverage = cal_coverage(Chr, start, end, sys.argv[1])
-                    all_pos, failed_pos = parse_coverage(coverage, min_depth=MIN_ROI_COVERAGE)
+                    all_pos, failed_pos = parse_coverage(coverage, min_depth=min_roi_coverage)
                     coverage_report['Exon ' + str(i)].append([start, end, all_pos, failed_pos])
                     print('Exon', i, label, 'pass rate=', 1 - len(failed_pos)/len(all_pos), file=sys.stderr)
                     print('Min. coverage:', min([p[2] for p in all_pos]), file=sys.stderr)
@@ -137,13 +140,13 @@ def main():
             plt.ylabel('Sequencing coverage (folds)')
             plt.yscale('log')
             y_ticks = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
-            y_ticks.append(MIN_ROI_COVERAGE)
+            y_ticks.append(min_roi_coverage)
             plt.yticks(ticks=y_ticks, labels=y_ticks)
             plt.xlabel('Exon number')
             plt.xticks(ticks=x_ticks_pos, labels=x_ticks_label)
-            plt.axhline(y=MIN_ROI_COVERAGE, color='green', linestyle='--')
+            plt.axhline(y=min_roi_coverage, color='green', linestyle='--')
             plt.title(g.transcript_name + ' coverage report\n Sample: ' + os.path.basename(sys.argv[1]) +
-                      ' Min. depth threshold:' + str(MIN_ROI_COVERAGE) + 'x')
+                      ' Min. depth threshold:' + str(min_roi_coverage) + 'x ' + 'Flanking: ' + str(cds_flank_bp) + 'bp')
             plt.tight_layout()
             pdf.savefig()
             plt.close()
