@@ -16,12 +16,12 @@ import urllib.parse
 import urllib.request
 
 debug = False
-version = '1.0j build 20190110'
-message = 'Updated the Gene() class to allow automatic transcript selection, and bug fixes'
+version = '1.0k build 20190227'
+message = 'Updated the server settings'
 
 def print_disclaimer():
     """Print disclaimer at exit"""
-    print('# AutoPrimer program by Tom C.C. Ho (c) 2017', file=sys.stderr)
+    print('# AutoPrimer program by Tom C.C. Ho (c) 2017-2019', file=sys.stderr)
     print('# Version ' + version, file=sys.stderr)
     print('# Release note: ' + message, file=sys.stderr)
     if debug:
@@ -68,9 +68,7 @@ def autoSNPfree(pair_name, fp, rp, server, max_wait=1200, batch_mode=False):
     if server == 'HKU':
         base_url = 'http://grass.cgs.hku.hk/SNPfree/SNPfree.php?primers='
     if server == 'PYN':
-        base_url = 'http://ebensee.hopto.org:8082/pyneh/SNPfree/SNPfree.php?primers='
-    if server == 'CYK':
-        base_url = 'http://vonbismarck.hopto.org:8080/SNPfree/SNPfree.php?primers='
+        base_url = 'http://223.197.142.243:8082/SNPfree/SNPfree.php?primers='
     if batch_mode:
         query = ''
         for i in range(len(pair_name)):
@@ -88,9 +86,7 @@ def autoSNPfree(pair_name, fp, rp, server, max_wait=1200, batch_mode=False):
         if server == 'HKU':
             result_url = 'http://grass.cgs.hku.hk/SNPfree/view.php?jobid='
         if server == 'PYN':
-            result_url = 'http://ebensee.hopto.org:8082/pyneh/SNPfree/view.php?jobid='
-        if server == 'CYK':
-            result_url = 'http://vonbismarck.hopto.org:8080/SNPfree/view.php?jobid='
+            result_url = 'http://223.197.142.243:8082/pyneh/SNPfree/view.php?jobid='
         ready = False
         # wait for the result
         waited = 0
