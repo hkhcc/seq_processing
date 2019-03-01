@@ -4,13 +4,15 @@ echo '# Starting PYNEH NGS analysis pipeline version 20190228...'
 
 # Show the help message if the required number of arguments is not found
 if [[ $# -ne 6 ]]; then
-	echo "    Usage: $0 [SAMPLE_NAME] [FASTQ1] [FASTQ2] [FLANK_BP] [COVERAGE] [GENE_LIST_TXT]"
+	echo "    Usage: $0 [SAMPLE_NAME] [FASTQ1] [FASTQ2] [COVERAGE] [FLANK_BP] [GENE_LIST_TXT]"
 	exit
 fi
 
 # Check the required programs
 echo '====='
 echo '# Initializing...'
+SCRIPT_DIR=`dirname "$(readlink -f "$0")"`
+echo "    Script directory: $SCRIPT_DIR"
 echo '== Programs =='
 echo "    BWA path: `which bwa`"
 echo "    SAMTOOLS path: `which samtools`"
@@ -20,8 +22,18 @@ echo "    R path: `which R`"
 echo "    VARDICT (var2vcf) path: `which var2vcf_valid.pl`"
 echo "    ANNOVAR path: `which table_annovar.pl`"
 echo "    PYTHON3 path: `which python3`"
-BUILD_BED_FILE=`readlink -e ~/Programs/seq_processing/build_bed_file.py`
+BUILD_BED_FILE=`readlink -e $SCRIPT_DIR/build_bed_file.py`
 echo "    BUILD_BED_FILE path: $BUILD_BED_FILE"
+IGV_PATH=`readlink -e ~/Programs/IGV/IGV_2.4.19/lib/igv.jar`
+echo "    IGV path: $IGV_PATH"
+IGV_PLOTTER_PATH=`which igv_plotter`
+echo "    IGV_PLOTTER path: $IGV_PLOTTER_PATH"
+RUN_IGV_PLOTTER=`readlink -e $SCRIPT_DIR/RunIGVPlotter.sh`
+echo "    RUN_IGV_PLOTTER path: $RUN_IGV_PLOTTER"
+PDF_REPORT_TOOL=`readlink -e $SCRIPT_DIR/ngs_variant_report.py`
+echo "    NGS_VARIANT_REPORT path: $PDF_REPORT_TOOL"
+PDF_COVREPORT_TOOL=`readlink -e $SCRIPT_DIR/gene_panel_coverage_report.py`
+echo "    NGS_COVERAGE_REPORT path: $PDF_COVREPORT_TOOL"
 echo '== Databases =='
 HG19_PATH=`readlink -e ~/bundle/hg19/ucsc.hg19.fasta.gz`
 if [[ -r $HG19_PATH ]]; then
@@ -44,6 +56,14 @@ if [[ -r $HUMANDB_PATH ]]; then
 	echo '    humandb... OK'
 else
 	echo '    humandb... Failure!'
+	exit
+fi
+
+CONTROL_BAM_PATH=`readlink -e ~/localdb/control.bam`
+if [[ -r $CONTROL_BAM_PATH ]]; then
+	echo '    control BAM file... OK'
+else
+	echo '    control BAM file... Failure!'
 	exit
 fi
 
@@ -78,10 +98,11 @@ else
 	OUTPUT_DIR=$DIR_A
 fi
 
-FLANK_BP=$4
-echo "    CDS flanking set to: $FLANK_BP bp"
-COVERAGE=$5
+COVERAGE=$4
 echo "    Minimum coverage set to: $COVERAGE x"
+
+FLANK_BP=$5
+echo "    CDS flanking set to: $FLANK_BP bp"
 
 echo "    Gene list text file: $6"
 if [[ -r $6 ]]; then
@@ -138,9 +159,58 @@ else
 	echo '====='
 	echo '# Step 4: Variant annotation...'
 	echo "# Writing output to $ANNO_VCF_PATH"
-	`table_annovar.pl $RAW_VCF_PATH $HUMANDB_PATH -buildver hg19 -out $ANNO_VCF_PREFIX -remove -protocol refGene,ensGene,1000g2015aug_all,gnomad_genome,exac03,gnomad_exome,dbnsfp35c,dbscsnv11,intervar_20180118,clinvar_20180603,avsnp150 -operation g,g,f,f,f,f,f,f,f,f,f -nastring . -vcfinput`
+	`table_annovar.pl $RAW_VCF_PATH $HUMANDB_PATH -buildver hg19 -out $ANNO_VCF_PREFIX -remove -protocol refGene,ensGene,1000g2015aug_all,1000g2015aug_eas,gnomad_genome,exac03,gnomad_exome,dbnsfp35c,dbscsnv11,intervar_20180118,clinvar_20180603,avsnp150 -operation g,g,f,f,f,f,f,f,f,f,f,f -nastring . -vcfinput`
 fi
 
+# Perform IGV plotting
+
+echo '====='
+echo '# Step 5: Automatic IGV plotting...'
+echo "# Writing output to $OUTPUT_DIR/snapshots"
+
+cd $OUTPUT_DIR
+
+if [ -r "$OUTPUT_DIR/snapshots" ]; then
+	echo "IGV snapshot directory found."
+else
+	echo "Creating IGV snapshot directory..."
+	mkdir $OUTPUT_DIR/snapshots
+fi
+
+cd "$OUTPUT_DIR/snapshots"
+
+echo "Current working directory: `pwd`"
+$RUN_IGV_PLOTTER $1 $BAM_PATH $ANNO_VCF_PATH $CONTROL_BAM_PATH $UNZIP_HG19_PATH $IGV_PATH $IGV_PLOTTER_PATH
+cd $SCRIPT_DIR
+echo "Current working directory: `pwd`"
+
+# Compile PDF variant report
+
+echo '====='
+echo '# Step 6: Compile PDF variant report'
+echo "# Output will be written to $OUTPUT_DIR/$1.pdf"
+python3 $PDF_REPORT_TOOL $ANNO_VCF_PATH
+if [ -r "$ANNO_VCF_PATH.pdf" ]; then
+	echo 'Renaming output...'
+	mv "$ANNO_VCF_PATH.pdf" "$OUTPUT_DIR/$1.pdf"
+else
+	echo 'Output file not found!'
+	exit
+fi
+
+# Compile PDF coverage report
+
+echo '====='
+echo '# Step 7: Compile PDF coverage report'
+echo "# Output will be written to $OUTPUT_DIR/$1.coverage.pdf"
+python $PDF_COVREPORT_TOOL $BAM_PATH $COVERAGE $FLANK_BP $GENE_LIST_TXT
+if [ -r "$BAM_PATH.coverage.pdf" ]; then
+	echo 'Renaming output...'
+	mv "$BAM_PATH.coverage.pdf" "$OUTPUT_DIR/$1.coverage.pdf"
+else
+	echo 'Output file not found!'
+	exit
+fi
 
 
 
