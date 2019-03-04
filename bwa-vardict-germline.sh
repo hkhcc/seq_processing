@@ -122,7 +122,7 @@ else
 	echo '====='
 	echo '# Step 1: Mapping...'
 	echo "# Writing output to $BAM_PATH"
-	`bwa mem -t 8 $HG19_PATH $FASTQ1 $FASTQ2 | samtools sort -@8 -o $BAM_PATH`
+	`bwa mem -R $1 -t 8 $HG19_PATH $FASTQ1 $FASTQ2 | samtools sort -@8 -o $BAM_PATH`
 	echo "# Indexing $BAM_PATH"
 	`samtools index -@8 $BAM_PATH $BAI_PATH`
 fi
