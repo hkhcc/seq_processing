@@ -18,7 +18,7 @@ import sys
 PIPELINES = ['bwa-vardict-germline.sh']
 PARAMETERS = [['Sample folder path', 'Coverage target', 'CDS flank (bp)']]
 
-script_dir = os.path.dirname(sys.argv[0])
+script_dir = os.path.dirname(os.path.realpath(__file__))
 
 # check that scripts exists
 for script_file in PIPELINES:
@@ -59,7 +59,7 @@ print('# Now generating commands', file=sys.stderr)
 # the bwa-vardict-germline.sh command
 if pipeline_index == 0:
     commands = []
-    run_folder = para_list[0].replace("'", '').replace('"', '')
+    run_folder = para_list[0].replace("'", '').replace('"', '').rstrip()
     assert os.path.isdir(run_folder), 'Run folder ' + run_folder + ' does not exist!'
     samples = os.listdir(run_folder)
     for sample in samples:
@@ -75,9 +75,10 @@ if pipeline_index == 0:
                 fastq2 = os.path.join(run_folder, sample, file)
             if file.endswith('.txt'):
                 gene_list = os.path.join(run_folder, sample, file)
+        print('Finished loading directory content.', file=sys.stderr)
         if fastq1 == '' or fastq2 == '' or gene_list == '':
-            print('Could not retrueve the required files!', file=sys.stderr)
-            print('Please check', os.path.join(run_folder, sample, file=sys.stderr))
+            print('Could not retrieve the required files!', file=sys.stderr)
+            print('Please check', os.path.join(run_folder, sample), file=sys.stderr)
         command += "'" + fastq1 + "' "
         command += "'" + fastq2 + "' "
         command += para_list[1] + " "
