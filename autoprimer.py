@@ -498,6 +498,13 @@ def combine_adj_regions(translated_regions, translated_region_names, chunk=800):
             out_names.append(translated_region_names[i])
     return out_regions, out_names
 
+def split_transcript_name(transcript_id):
+    """Return the gene name and transcript number"""
+    transcript_number = transcript_id.split('-')[-1]
+    gene_name = transcript_id.replace('-' + transcript_number, '')
+    assert gene_name + '-' + transcript_number == transcript_id, transcript_id + ' is unexpected!'
+    return gene_name, transcript_number
+
 class Gene:
     """Base container for genetic information from Ensembl"""
     def __init__(self, name, version='GRCh38'):

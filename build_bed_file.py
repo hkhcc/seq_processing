@@ -7,14 +7,14 @@ Usage:
 """
 import argparse
 
-from autoprimer import Gene
+from autoprimer import Gene, split_transcript_name
 
 def generate_bed(transcripts, flanking=10):
     unsorted_output = list()
     for transcript in transcripts:
-        if len(transcript.split('-')) == 2:
+        if '-' in transcript:
             # user-specified transcript
-            gene_name, transcript_number = transcript.split('-')
+            gene, transcript_number = split_transcript_name(transcript)
             g = Gene(gene_name, version='GRCh37')
             g.set_transcript(transcript)
         else:
