@@ -6,15 +6,16 @@ Usage:
     build_bed_file.py [TRANSCRIPT-NAME-1] [TRANSCRIPT-NAME-2]
 """
 import argparse
+import re
 
 from autoprimer import Gene, split_transcript_name
 
 def generate_bed(transcripts, flanking=10):
     unsorted_output = list()
     for transcript in transcripts:
-        if '-' in transcript:
+        if re.search(r'-[0-9][0-9][0-9]', transcript):
             # user-specified transcript
-            gene, transcript_number = split_transcript_name(transcript)
+            gene_name, transcript_number = split_transcript_name(transcript)
             g = Gene(gene_name, version='GRCh37')
             g.set_transcript(transcript)
         else:
