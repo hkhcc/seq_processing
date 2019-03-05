@@ -1,4 +1,4 @@
-# Arrhythmia Panel from GeneDx
+# Arrhythmia Panel
 # https://www.genedx.com/test-catalog/available-tests/arrhythmia-panel/
 ABCC9
 AKAP9
