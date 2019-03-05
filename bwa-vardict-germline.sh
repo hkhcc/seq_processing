@@ -141,7 +141,7 @@ else
 	echo "[Timestamp: `date`]"
 	echo '# Step 2: Generate BED file for variant calling...'
 	echo "# Writing output to $BED_PATH"
-	GENE_STRING=`cat $GENE_LIST_TXT | tr '\r\n' '\n' | tr '\n' ' '`
+	GENE_STRING=`grep -v '^#'  $GENE_LIST_TXT | grep -v '^$' | tr '\r\n' '\n' | tr '\n' ' '`
 	`python3 $BUILD_BED_FILE -f $FLANK_BP $GENE_STRING > $BED_PATH`
 fi
 
