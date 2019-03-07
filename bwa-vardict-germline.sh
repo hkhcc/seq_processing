@@ -26,7 +26,7 @@ echo "    ANNOVAR path: `which table_annovar.pl`"
 echo "    PYTHON3 path: `which python3`"
 BUILD_BED_FILE=`readlink -e $SCRIPT_DIR/build_bed_file.py`
 echo "    BUILD_BED_FILE path: $BUILD_BED_FILE"
-IGV_PATH=`readlink -e ~/Programs/IGV/IGV_2.4.19/lib/igv.jar`
+IGV_PATH=`readlink -e ~/Programs/igv_utils/igv_plotter/lib/igv.jar`
 echo "    IGV path: $IGV_PATH"
 IGV_PLOTTER_PATH=`which igv_plotter`
 echo "    IGV_PLOTTER path: $IGV_PLOTTER_PATH"
