@@ -26,7 +26,7 @@ echo "    ANNOVAR path: `which table_annovar.pl`"
 echo "    PYTHON3 path: `which python3`"
 BUILD_BED_FILE=`readlink -e $SCRIPT_DIR/build_bed_file.py`
 echo "    BUILD_BED_FILE path: $BUILD_BED_FILE"
-IGV_PATH=`readlink -e ~/Programs/IGV/IGV_2.4.19/lib/igv.jar`
+IGV_PATH=`readlink -e ~/Programs/igv_utils/igv_plotter/lib/igv.jar`
 echo "    IGV path: $IGV_PATH"
 IGV_PLOTTER_PATH=`which igv_plotter`
 echo "    IGV_PLOTTER path: $IGV_PLOTTER_PATH"
@@ -36,6 +36,7 @@ PDF_REPORT_TOOL=`readlink -e $SCRIPT_DIR/ngs_variant_report.py`
 echo "    NGS_VARIANT_REPORT path: $PDF_REPORT_TOOL"
 PDF_COVREPORT_TOOL=`readlink -e $SCRIPT_DIR/gene_panel_coverage_report.py`
 echo "    NGS_COVERAGE_REPORT path: $PDF_COVREPORT_TOOL"
+echo "    BEDTOOLS path: `which bedtools`"
 echo '== Databases =='
 HG19_PATH=`readlink -e ~/bundle/hg19/ucsc.hg19.fasta.gz`
 if [[ -r $HG19_PATH ]]; then
@@ -183,17 +184,18 @@ cd $OUTPUT_DIR
 
 if [ -r "$OUTPUT_DIR/snapshots" ]; then
 	echo "IGV snapshot directory found."
+	echo '!! File found. Skipping Step 5. !!'
 else
 	echo "Creating IGV snapshot directory..."
 	mkdir $OUTPUT_DIR/snapshots
+	cd "$OUTPUT_DIR/snapshots"
+	echo "Current working directory: `pwd`"
+	$RUN_IGV_PLOTTER $1 $BAM_PATH $ANNO_VCF_PATH $CONTROL_BAM_PATH $UNZIP_HG19_PATH $IGV_PATH $IGV_PLOTTER_PATH
+	cd $SCRIPT_DIR
+	echo "Current working directory: `pwd`"
 fi
 
-cd "$OUTPUT_DIR/snapshots"
 
-echo "Current working directory: `pwd`"
-$RUN_IGV_PLOTTER $1 $BAM_PATH $ANNO_VCF_PATH $CONTROL_BAM_PATH $UNZIP_HG19_PATH $IGV_PATH $IGV_PLOTTER_PATH
-cd $SCRIPT_DIR
-echo "Current working directory: `pwd`"
 
 # Compile PDF variant report
 
@@ -232,7 +234,7 @@ echo "[Timestamp: `date`]"
 echo '# Step 8: Generate FastQC reports'
 echo "# Output will be written to $OUTPUT_DIR/fastqc"
 if [ -d "$OUTPUT_DIR/fastqc" ]; then
-	echo 'FastQC output directory found. Step 8 will be skipped.'
+	echo '!! FastQC output directory found. Skipping Step 8. !!'
 	echo "Note: Remove $OUTPUT_DIR/fastqc in order to trigger the FastQC step."
 else
 	cd $OUTPUT_DIR
@@ -242,6 +244,20 @@ else
 	mv *.html *.zip ./fastqc
 	cd $SCRIPT_DIR
 	echo "Current working directory: `pwd`"
+fi
+
+# Generate ROI BAM file for storage
+
+echo '====='
+echo "[Timestamp: `date`]"
+echo '# Step 9: Generate ROI BAM files for storage'
+echo "# Output will be written to $OUTPUT_DIR/$1.ROI.bam"
+if [ -r "$OUTPUT_DIR/$1.ROI.bam" ]; then
+	echo 'ROI BAM file found. Step 9 will be skipped.'
+	echo "Note: Remove $OUTPUT_DIR/$1.ROI.bam in order to trigger the ROI BAM generation step."
+else
+	bedtools intersect -a $BAM_PATH -b $BED_PATH > $OUTPUT_DIR/$1.ROI.bam
+	samtools index $OUTPUT_DIR/$1.ROI.bam
 fi
 
 
