@@ -2,12 +2,6 @@
 
 echo '# Starting PYNEH NGS analysis pipeline version 20190228...'
 
-# Show the help message if the required number of arguments is not found
-if [[ $# -ne 6 ]]; then
-	echo "    Usage: $0 [SAMPLE_NAME] [FASTQ1] [FASTQ2] [COVERAGE] [FLANK_BP] [GENE_LIST_TXT]"
-	exit
-fi
-
 # Check the required programs
 echo '====='
 echo "[Timestamp: `date`]"
@@ -17,6 +11,7 @@ echo "    Script directory: $SCRIPT_DIR"
 echo '== Programs =='
 echo "    FastQC path: `which fastqc`"
 echo "    BWA path: `which bwa`"
+echo "    SPEEDSEQ path: `which speedseq`"
 echo "    SAMTOOLS path: `which samtools`"
 echo "    VARDICT (core) path: `which VarDict`"
 echo "    VARDICT (strand bias test) path: `which teststrandbias.R`"
@@ -70,6 +65,20 @@ else
 	exit
 fi
 
+SV_EXCLUDE_BED_PATH=`readlink -e ~/Programs/speedseq/annotations/ceph18.b37.exclude.2014-01-15.bed`
+if [[ -r $SV_EXCLUDE_BED_PATH ]]; then
+	echo '    SV exclusion BED file... OK'
+else
+	echo '    SV exclusion BED file... Failure!'
+	exit
+fi
+
+# Show the help message if the required number of arguments is not found
+if [[ $# -ne 6 ]]; then
+	echo "    Usage: $0 [SAMPLE_NAME] [FASTQ1] [FASTQ2] [COVERAGE] [FLANK_BP] [GENE_LIST_TXT]"
+	exit
+fi
+
 # Check the input files
 echo '# Validating inputs...'
 echo "    Sample name: $1"
@@ -119,17 +128,17 @@ fi
 # Perform mapping
 BAM_PATH="$OUTPUT_DIR/$1.bam"
 BAI_PATH="$OUTPUT_DIR/$1.bam.bai"
-if [ -r $BAM_PATH ] && [ -r $BAI_PATH ]; then
+SPLITTERS_PATH="$OUTPUT_DIR/$1.splitters.bam"
+DISCORDANTS_PATH="$OUTPUT_DIR/$1.discordants.bam"
+if [ -r $BAM_PATH ] && [ -r $BAI_PATH ] && [ -r $SPLITTERS_PATH ] && [ -r $DISCORDANTS_PATH ]; then
 	echo "[Timestamp: `date`]"
 	echo '!! Files found. Skipping Step 1. !!'
 else
 	echo '====='
 	echo "[Timestamp: `date`]"
-	echo '# Step 1: Mapping...'
+	echo '# Step 1: Mapping, deduplication and sorting...'
 	echo "# Writing output to $BAM_PATH"
-	`bwa mem -R "@RG\tID:$1\tSM:$1\tLB:$1\tPL:ILMN_LIKE" -t 8 $HG19_PATH $FASTQ1 $FASTQ2 | samtools sort -@8 -o $BAM_PATH`
-	echo "# Indexing $BAM_PATH"
-	`samtools index -@8 $BAM_PATH $BAI_PATH`
+	speedseq align -R "@RG\tID:$1\tSM:$1\tLB:$1\tPL:ILMN_LIKE" -t 8 -o $OUTPUT_DIR/$1 $HG19_PATH $FASTQ1 $FASTQ2
 fi
 
 # Generate BED file
@@ -143,10 +152,10 @@ else
 	echo '# Step 2: Generate BED file for variant calling...'
 	echo "# Writing output to $BED_PATH"
 	GENE_STRING=`grep -v '^#'  $GENE_LIST_TXT | grep -v '^$' | tr '\r\n' '\n' | tr '\n' ' '`
-	`python3 $BUILD_BED_FILE -f $FLANK_BP $GENE_STRING > $BED_PATH`
+	python3 $BUILD_BED_FILE -f $FLANK_BP $GENE_STRING > $BED_PATH
 fi
 
-# Perform variant calling
+# Perform small indel and SNV calling
 RAW_VCF_PATH="$OUTPUT_DIR/$1.raw.vcf"
 if [ -r $RAW_VCF_PATH ]; then
 	echo "[Timestamp: `date`]"
@@ -154,12 +163,12 @@ if [ -r $RAW_VCF_PATH ]; then
 else
 	echo '====='
 	echo "[Timestamp: `date`]"
-	echo '# Step 3: Variant calling...'
+	echo '# Step 3: Small variant calling...'
 	echo "# Writing output to $RAW_VCF_PATH"
-	`VarDict -G $UNZIP_HG19_PATH -f 0.05 -I 1000 -L 1001 -k 1 -N $1 -th 8 --dedup -b $BAM_PATH -z -c 1 -S 2 -E 3 -g 4 $BED_PATH | teststrandbias.R | var2vcf_valid.pl -N $1 -E -f 0.05 > $RAW_VCF_PATH`
+	VarDict -G $UNZIP_HG19_PATH -f 0.05 -I 1000 -L 1001 -k 1 -N $1 -th 8 --dedup -b $BAM_PATH -z -c 1 -S 2 -E 3 -g 4 $BED_PATH | teststrandbias.R | var2vcf_valid.pl -N $1 -E -f 0.05 > $RAW_VCF_PATH
 fi
 
-# Perform variant annotation
+# Perform small indel and SNV annotation
 ANNO_VCF_PREFIX="$OUTPUT_DIR/$1.annovar"
 ANNO_VCF_PATH="$OUTPUT_DIR/$1.annovar.hg19_multianno.vcf"
 if [ -r $ANNO_VCF_PATH ]; then
@@ -170,27 +179,40 @@ else
 	echo "[Timestamp: `date`]"
 	echo '# Step 4: Variant annotation...'
 	echo "# Writing output to $ANNO_VCF_PATH"
-	`table_annovar.pl $RAW_VCF_PATH $HUMANDB_PATH -buildver hg19 -out $ANNO_VCF_PREFIX -remove -protocol refGene,ensGene,1000g2015aug_all,1000g2015aug_eas,gnomad_genome,exac03,gnomad_exome,dbnsfp35c,dbscsnv11,intervar_20180118,clinvar_20180603,avsnp150 -operation g,g,f,f,f,f,f,f,f,f,f,f -nastring . -vcfinput`
+	table_annovar.pl $RAW_VCF_PATH $HUMANDB_PATH -buildver hg19 -out $ANNO_VCF_PREFIX -remove -protocol refGene,ensGene,1000g2015aug_all,1000g2015aug_eas,gnomad_genome,exac03,gnomad_exome,dbnsfp35c,dbscsnv11,intervar_20180118,clinvar_20180603,avsnp150 -operation g,g,f,f,f,f,f,f,f,f,f,f -nastring . -vcfinput
+fi
+
+# Perform SV calling
+SV_VCF_PATH="$OUTPUT_DIR/$1.sv.vcf.gz"
+if [ -r $SV_VCF_PATH ]; then
+	echo "[Timestamp: `date`]"
+	echo '!! File found. Skipping Step 5. !!'
+else
+	echo '====='
+	echo "[Timestamp: `date`]"
+	echo '# Step 5: Structural variant calling...'
+	echo "# Writing output to $SV_VCF_PATH"
+	speedseq sv -B $BAM_PATH -S $SPLITTERS_PATH -D $DISCORDANTS_PATH -R $HG19_PATH -o $OUTPUT_DIR/$1 -x $SV_EXCLUDE_BED_PATH
 fi
 
 # Perform IGV plotting
 
 echo '====='
 echo "[Timestamp: `date`]"
-echo '# Step 5: Automatic IGV plotting...'
+echo '# Step 6: Automatic IGV plotting...'
 echo "# Writing output to $OUTPUT_DIR/snapshots"
 
 cd $OUTPUT_DIR
 
 if [ -r "$OUTPUT_DIR/snapshots" ]; then
 	echo "IGV snapshot directory found."
-	echo '!! File found. Skipping Step 5. !!'
+	echo '!! File found. Skipping Step 6. !!'
 else
 	echo "Creating IGV snapshot directory..."
 	mkdir $OUTPUT_DIR/snapshots
 	cd "$OUTPUT_DIR/snapshots"
 	echo "Current working directory: `pwd`"
-	$RUN_IGV_PLOTTER $1 $BAM_PATH $ANNO_VCF_PATH $CONTROL_BAM_PATH $UNZIP_HG19_PATH $IGV_PATH $IGV_PLOTTER_PATH
+	$RUN_IGV_PLOTTER $1 $BAM_PATH $BED_PATH $ANNO_VCF_PATH $CONTROL_BAM_PATH $SV_VCF_PATH $IGV_PATH $IGV_PLOTTER_PATH
 	cd $SCRIPT_DIR
 	echo "Current working directory: `pwd`"
 fi
@@ -201,7 +223,7 @@ fi
 
 echo '====='
 echo "[Timestamp: `date`]"
-echo '# Step 6: Compile PDF variant report'
+echo '# Step 7: Compile PDF variant report'
 echo "# Output will be written to $OUTPUT_DIR/$1.pdf"
 python3 $PDF_REPORT_TOOL $ANNO_VCF_PATH
 if [ -r "$ANNO_VCF_PATH.pdf" ]; then
@@ -216,7 +238,7 @@ fi
 
 echo '====='
 echo "[Timestamp: `date`]"
-echo '# Step 7: Compile PDF coverage report'
+echo '# Step 8: Compile PDF coverage report'
 echo "# Output will be written to $OUTPUT_DIR/$1.coverage.pdf"
 python $PDF_COVREPORT_TOOL $BAM_PATH $COVERAGE $FLANK_BP $GENE_LIST_TXT
 if [ -r "$BAM_PATH.coverage.pdf" ]; then
@@ -231,10 +253,10 @@ fi
 
 echo '====='
 echo "[Timestamp: `date`]"
-echo '# Step 8: Generate FastQC reports'
+echo '# Step 9: Generate FastQC reports'
 echo "# Output will be written to $OUTPUT_DIR/fastqc"
 if [ -d "$OUTPUT_DIR/fastqc" ]; then
-	echo '!! FastQC output directory found. Skipping Step 8. !!'
+	echo '!! FastQC output directory found. Skipping Step 9. !!'
 	echo "Note: Remove $OUTPUT_DIR/fastqc in order to trigger the FastQC step."
 else
 	cd $OUTPUT_DIR
@@ -250,14 +272,17 @@ fi
 
 echo '====='
 echo "[Timestamp: `date`]"
-echo '# Step 9: Generate ROI BAM files for storage'
+echo '# Step 10: Generate ROI BAM files for storage'
 echo "# Output will be written to $OUTPUT_DIR/$1.ROI.bam"
 if [ -r "$OUTPUT_DIR/$1.ROI.bam" ]; then
-	echo 'ROI BAM file found. Step 9 will be skipped.'
+	echo 'ROI BAM file found. Step 10 will be skipped.'
 	echo "Note: Remove $OUTPUT_DIR/$1.ROI.bam in order to trigger the ROI BAM generation step."
 else
 	bedtools intersect -a $BAM_PATH -b $BED_PATH > $OUTPUT_DIR/$1.ROI.bam
 	samtools index $OUTPUT_DIR/$1.ROI.bam
 fi
 
+echo '====='
+echo 'DONE!'
+echo "[Timestamp: `date`]"
 

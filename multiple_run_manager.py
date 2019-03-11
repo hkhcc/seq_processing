@@ -73,7 +73,7 @@ if pipeline_index == 0:
                 fastq1 = os.path.join(run_folder, sample, file)
             if file.endswith('2.fq.gz'):
                 fastq2 = os.path.join(run_folder, sample, file)
-            if file.endswith('.txt'):
+            if file.endswith('.txt') and not file.endswith('multianno.txt'):
                 gene_list = os.path.join(run_folder, sample, file)
         print('Finished loading directory content.', file=sys.stderr)
         if fastq1 == '' or fastq2 == '' or gene_list == '':
