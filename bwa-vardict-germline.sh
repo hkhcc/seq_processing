@@ -261,7 +261,7 @@ if [ -d "$OUTPUT_DIR/fastqc" ]; then
 else
 	cd $OUTPUT_DIR
 	echo "Current working directory: `pwd`"
-	fastqc $FASTQ1 $FASTQ2
+	fastqc -t 8 $FASTQ1 $FASTQ2
 	mkdir fastqc
 	mv *.html *.zip ./fastqc
 	cd $SCRIPT_DIR

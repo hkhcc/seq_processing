@@ -141,7 +141,7 @@ if __name__ == "__main__":
                                        + ' [' + png['info']['MutationTaster_pred'] + ']')
             a.text(0.1, 0.35, 'InterVar: ' + png['info']['InterVar_automated'])
             a.text(0.1, 0.325, 'ClinVar: ' + png['info']['CLNSIG'] + '/'
-                                           + png['info']['CLNDN'])
+                                           + png['info']['CLNDN'][0:30]) # truncate CLNDN at 30 characters
             # a.text(0.1, 0.30, png['info']['CLNACC'] + '/'
             #                    + png['info']['CLNDSDB'] + '/'
             #                    + png['info']['CLNDSDBID'])
