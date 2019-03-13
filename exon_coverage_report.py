@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 
 from matplotlib.backends.backend_pdf import PdfPages
 
-from autoprimer import Gene, get_flanking_regions
+from autoprimer import Gene, get_flanking_regions, split_transcript_name
 
 # the maximum coverage in the BAM file (too small a value can result in overflow)
 MAX_DEPTH = 1000000
@@ -70,15 +70,13 @@ def main():
         for target in sys.argv[4:]:
             # assume gene name or transcript name is something meaningful
             target_type = None
-            if '-' in target:
-                assert len(target.split('-')) == 2, "TRANSCRIPT_ID not valid!"
+            if re.search(r'-[0-9][0-9][0-9]', target):
                 target_type = 'transcript'
             else:
                 target_type = 'gene'
-            
             # now retrieve gene info
             if target_type == 'transcript':
-                gene_name, transcript_number = target.split('-')
+                gene_name, transcript_number = split_transcript_name(target)
                 g = Gene(gene_name, version='GRCh37') # we need GRCh37 for hg19 coordinates
                 g.set_transcript(target)
             elif target_type == 'gene':
