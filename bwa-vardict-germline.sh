@@ -192,7 +192,7 @@ else
 	echo "[Timestamp: `date`]"
 	echo '# Step 5: Structural variant calling...'
 	echo "# Writing output to $SV_VCF_PATH"
-	speedseq sv -B $BAM_PATH -S $SPLITTERS_PATH -D $DISCORDANTS_PATH -R $HG19_PATH -o $OUTPUT_DIR/$1 -x $SV_EXCLUDE_BED_PATH
+	speedseq sv -B $BAM_PATH -S $SPLITTERS_PATH -D $DISCORDANTS_PATH -R $HG19_PATH -o $OUTPUT_DIR/$1 -x $SV_EXCLUDE_BED_PATH -t 8 -d -P
 fi
 
 # Perform IGV plotting
