@@ -13,6 +13,7 @@ echo "    FastQC path: `which fastqc`"
 echo "    BWA path: `which bwa`"
 echo "    SPEEDSEQ path: `which speedseq`"
 echo "    SAMTOOLS path: `which samtools`"
+echo "    BCFTOOLS path: `which bcftools`"
 echo "    VARDICT (core) path: `which VarDict`"
 echo "    VARDICT (strand bias test) path: `which teststrandbias.R`"
 echo "    R path: `which R`"
@@ -184,6 +185,7 @@ fi
 
 # Perform SV calling
 SV_VCF_PATH="$OUTPUT_DIR/$1.sv.vcf.gz"
+RD_BED_PATH="$OUTPUT_DIR/$1.sv.$1.bam.readdepth.bed"
 if [ -r $SV_VCF_PATH ]; then
 	echo "[Timestamp: `date`]"
 	echo '!! File found. Skipping Step 5. !!'
@@ -193,6 +195,8 @@ else
 	echo '# Step 5: Structural variant calling...'
 	echo "# Writing output to $SV_VCF_PATH"
 	speedseq sv -B $BAM_PATH -S $SPLITTERS_PATH -D $DISCORDANTS_PATH -R $HG19_PATH -o $OUTPUT_DIR/$1 -x $SV_EXCLUDE_BED_PATH -t 8 -d -P
+        echo "# Intersecting region of ROI bed file with read depth SV calls..."
+        bedtools intersect -a $BED_PATH -b $RD_BED_PATH -wb > $OUTPUT_DIR/$1.ROI.SV_report.txt
 fi
 
 # Perform IGV plotting
@@ -201,8 +205,6 @@ echo '====='
 echo "[Timestamp: `date`]"
 echo '# Step 6: Automatic IGV plotting...'
 echo "# Writing output to $OUTPUT_DIR/snapshots"
-
-cd $OUTPUT_DIR
 
 if [ -r "$OUTPUT_DIR/snapshots" ]; then
 	echo "IGV snapshot directory found."
@@ -217,43 +219,85 @@ else
 	echo "Current working directory: `pwd`"
 fi
 
-
-
 # Compile PDF variant report
 
 echo '====='
 echo "[Timestamp: `date`]"
 echo '# Step 7: Compile PDF variant report'
-echo "# Output will be written to $OUTPUT_DIR/$1.pdf"
-python3 $PDF_REPORT_TOOL $ANNO_VCF_PATH
-if [ -r "$ANNO_VCF_PATH.pdf" ]; then
-	echo 'Renaming output...'
-	mv "$ANNO_VCF_PATH.pdf" "$OUTPUT_DIR/$1.pdf"
+if [ -r "$OUTPUT_DIR/$1.pdf" ]; then
+	echo "Main PDF report found."
+	echo '!! File found. Skipping Step 7. !!'
 else
-	echo 'Output file not found!'
-	exit
+	echo "# Output will be written to $OUTPUT_DIR/$1.pdf"
+	python3 $PDF_REPORT_TOOL $ANNO_VCF_PATH
+	if [ -r "$ANNO_VCF_PATH.pdf" ]; then
+		echo 'Renaming output...'
+		mv "$ANNO_VCF_PATH.pdf" "$OUTPUT_DIR/$1.pdf"
+	else
+		echo 'Output file not found!'
+		exit
+	fi
 fi
+
 
 # Compile PDF coverage report
 
 echo '====='
 echo "[Timestamp: `date`]"
 echo '# Step 8: Compile PDF coverage report'
-echo "# Output will be written to $OUTPUT_DIR/$1.coverage.pdf"
-python $PDF_COVREPORT_TOOL $BAM_PATH $COVERAGE $FLANK_BP $GENE_LIST_TXT
-if [ -r "$BAM_PATH.coverage.pdf" ]; then
-	echo 'Renaming output...'
-	mv "$BAM_PATH.coverage.pdf" "$OUTPUT_DIR/$1.coverage.pdf"
+if [ -r "$OUTPUT_DIR/$1.coverage.pdf" ]; then
+	echo "PDF coverage report found."
+	echo '!! File found. Skipping Step 8. !!'
 else
-	echo 'Output file not found!'
-	exit
+	echo "# Output will be written to $OUTPUT_DIR/$1.coverage.pdf"
+	python3 $PDF_COVREPORT_TOOL $BAM_PATH $COVERAGE $FLANK_BP $GENE_LIST_TXT
+	if [ -r "$BAM_PATH.coverage.pdf" ]; then
+		echo 'Renaming output...'
+		mv "$BAM_PATH.coverage.pdf" "$OUTPUT_DIR/$1.coverage.pdf"
+	else
+		echo 'Output file not found!'
+		exit
+	fi
+fi
+
+
+# Optionally, perform the force-call of SNPs
+
+echo '====='
+echo "[Timestamp: `date`]"
+echo '# Step 9: Perform force-call of variants'
+if [ -r "$OUTPUT_DIR/FORCECALL.snp" ]; then
+	echo 'Force-call target file found.'
+	echo 'Now building force-call region list...'
+	TARGET_STRING=`grep -v '^#' "$OUTPUT_DIR/FORCECALL.snp" | grep -v '^$' | tr '\r\n' '\n' | tr '\n' ' '`
+	python3 $BUILD_BED_FILE -f $FLANK_BP $TARGET_STRING > "$OUTPUT_DIR/FORCECALL.regions"
+	echo 'Now performing force-calling...'
+	bcftools mpileup -f $UNZIP_HG19_PATH -R $OUTPUT_DIR/FORCECALL.regions $BAM_PATH | bcftools call -m > $OUTPUT_DIR/$1.FORCECALL.vcf
+	echo 'Now performing additional IGV plotting...'
+	cd "$OUTPUT_DIR/snapshots"
+	echo "Current working directory: `pwd`"
+	$RUN_IGV_PLOTTER $1 $BAM_PATH $BED_PATH $OUTPUT_DIR/$1.FORCECALL.vcf $CONTROL_BAM_PATH $RD_BED_PATH $IGV_PATH $IGV_PLOTTER_PATH
+	cd $SCRIPT_DIR
+	echo "Current working directory: `pwd`"
+	echo 'Now performing additional reporting...'
+	echo "# Output will be written to $OUTPUT_DIR/$1.FORCECALL.pdf"
+	python3 $PDF_REPORT_TOOL $OUTPUT_DIR/$1.FORCECALL.vcf $OUTPUT_DIR/FORCECALL.regions
+	if [ -r "$OUTPUT_DIR/$1.FORCECALL.vcf.pdf" ]; then
+		echo 'Renaming output...'
+		mv "$OUTPUT_DIR/$1.FORCECALL.vcf.pdf" "$OUTPUT_DIR/$1.FORCECALL.pdf"
+	else
+		echo 'Output file not found!'
+		exit
+	fi
+else
+	echo "Force-call target file ($OUTPUT_DIR/FORCECALL.snp) not found. Skipping force-calling.."
 fi
 
 # Generate quality statistics
 
 echo '====='
 echo "[Timestamp: `date`]"
-echo '# Step 9: Generate FastQC reports'
+echo '# Step 10: Generate FastQC reports'
 echo "# Output will be written to $OUTPUT_DIR/fastqc"
 if [ -d "$OUTPUT_DIR/fastqc" ]; then
 	echo '!! FastQC output directory found. Skipping Step 9. !!'

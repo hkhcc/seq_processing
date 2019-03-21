@@ -55,7 +55,7 @@ def parse_vcf(vcf_path):
                 else:
                     # infer sample name from VCF filename
                     sample_name = os.path.basename(vcf_path)
-                    sample_name = str(sample_name).split('.FreeBayes.')[0]
+                    sample_name = str(sample_name).split('.')[0]
                     info_dict['SAMPLE'] = sample_name
                 png_filename = sample_name + 's' + str(variant_count) + '__' + chrom + '_' + str(pos) + '.png'
                 png_list.append({
@@ -95,16 +95,28 @@ def dp4(dp4_field, count):
     else:
         raise NotImplementedError
 
+def parse_annotation(forcecall_regions):
+    """Simple function to convert the annotation file to a list"""
+    anno = list()
+    with open(forcecall_regions, 'r') as f:
+        for line in f:
+            if not line.startswith('#'):
+                anno.append(line.rstrip().split('\t'))
+    return anno
+
 
 if __name__ == "__main__":
 
     if len(sys.argv) < 2:
-        print('Usage: ngs_variant_report.py [in.vcf]')
+        print('Usage: ngs_variant_report.py [in.vcf] [forcecall.regions]')
         sys.exit()
 
     vcf_path = os.path.realpath(sys.argv[1])
     vcf_folder = os.path.dirname(vcf_path)
     png_list, called_by_fb, called_by_bcftools = parse_vcf(vcf_path)
+    if len(sys.argv) == 3:
+        rs_anno = parse_annotation(sys.argv[2])
+        assert len(rs_anno) == len(png_list), "Annotation file mismatch!"
 
     # create a multi-page PDF file object for writing
     with PdfPages(os.path.join(vcf_path + '.pdf')) as pdf:
@@ -133,40 +145,42 @@ if __name__ == "__main__":
                         ')'
                         )
             elif called_by_bcftools:
-                a.text(0.1, 0.80, 'Frequency: ' + png['info']['AF']
-                        + ' (' + str(dp4(png['info']['DP4'], count='ref'))
-                        + '/' + str(dp4(png['info']['DP4'], count='alt')) +
-                        ')'
+                a.text(0.1, 0.80, 'Frequency: ' 
+                        + ' ref=' + str(dp4(png['info']['DP4'], count='ref'))
+                        + ' alt=' + str(dp4(png['info']['DP4'], count='alt')) 
+                        + ' (total=' + str(dp4(png['info']['DP4'], count='ref') + dp4(png['info']['DP4'], count='alt')) + ')'
                         )
+                a.text(0.1, 0.70, 'NCBI rs number (dbSNP150): ' + rs_anno[variant_count-1][3]) # the annotation list is 0-based
+                a.text(0.1, 0.65, ' '.join(rs_anno[variant_count-1][0:3]))
             else:
                 a.text(0.1, 0.80, 'Frequency: ' + png['info']['AF']
                         + ' (' + png['info']['VD']
                         + ' out of ' + png['info']['DP'] +
                         ' reads)'
                         )
-            a.text(0.1, 0.75, 'Variant quality score: ' + str(png['qual']) + ' [' + png['filter'] + ']')
-            a.text(0.1, 0.70, 'NCBI rs number (dbSNP150): ' + png['info']['avsnp150'])
-            a.text(0.1, 0.65, 'ExAC: ' + png['info']['ExAC_ALL'] + ' [ALL] '
+                a.text(0.1, 0.75, 'Variant quality score: ' + str(png['qual']) + ' [' + png['filter'] + ']')
+                a.text(0.1, 0.70, 'NCBI rs number (dbSNP150): ' + png['info']['avsnp150'])
+                a.text(0.1, 0.65, 'ExAC: ' + png['info']['ExAC_ALL'] + ' [ALL] '
                                        + png['info']['ExAC_EAS'] + ' [EAS] ')
-            a.text(0.1, 0.60, 'gnomAD exome: ' + png['info']['gnomAD_exome_ALL'] + ' [ALL] '
+                a.text(0.1, 0.60, 'gnomAD exome: ' + png['info']['gnomAD_exome_ALL'] + ' [ALL] '
                                        + png['info']['gnomAD_exome_EAS'] + ' [EAS] ')
-            a.text(0.1, 0.55, '1000G (2015Aug): ' + png['info']['1000g2015aug_all'] + ' [ALL] '
+                a.text(0.1, 0.55, '1000G (2015Aug): ' + png['info']['1000g2015aug_all'] + ' [ALL] '
                                        + png['info']['1000g2015aug_eas'] + ' [EAS] ')
-            # a.text(0.1, 0.50, 'Polyphen2 (HDIV): ' + png['info']['Polyphen2_HDIV_score']
-            #                           + ' [' + png['info']['Polyphen2_HDIV_pred'] + ']')
-            a.text(0.1, 0.45, 'SIFT: ' + png['info']['SIFT_score']
+                # a.text(0.1, 0.50, 'Polyphen2 (HDIV): ' + png['info']['Polyphen2_HDIV_score']
+                #                           + ' [' + png['info']['Polyphen2_HDIV_pred'] + ']')
+                a.text(0.1, 0.45, 'SIFT: ' + png['info']['SIFT_score']
                                        + ' [' + png['info']['SIFT_pred'] + ']')
-            a.text(0.1, 0.40, 'MutationTaster: ' + png['info']['MutationTaster_score']
+                a.text(0.1, 0.40, 'MutationTaster: ' + png['info']['MutationTaster_score']
                                        + ' [' + png['info']['MutationTaster_pred'] + ']')
-            a.text(0.1, 0.35, 'InterVar: ' + png['info']['InterVar_automated'])
-            a.text(0.1, 0.325, 'ClinVar: ' + png['info']['CLNSIG'] + '/'
+                a.text(0.1, 0.35, 'InterVar: ' + png['info']['InterVar_automated'])
+                a.text(0.1, 0.325, 'ClinVar: ' + png['info']['CLNSIG'] + '/'
                                            + png['info']['CLNDN'][0:30]) # truncate CLNDN at 30 characters
-            # a.text(0.1, 0.30, png['info']['CLNACC'] + '/'
-            #                    + png['info']['CLNDSDB'] + '/'
-            #                    + png['info']['CLNDSDBID'])
-            a.text(0.1, 0.275, 'refGene: ' + png['info']['Gene.refGene']
+                # a.text(0.1, 0.30, png['info']['CLNACC'] + '/'
+                #                    + png['info']['CLNDSDB'] + '/'
+                #                    + png['info']['CLNDSDBID'])
+                a.text(0.1, 0.275, 'refGene: ' + png['info']['Gene.refGene']
                                             + ' [' + png['info']['ExonicFunc.refGene'] + ']')
-            a.text(0.1, 0.25, 'refGene AA change: ' + str(png['info']['AAChange.refGene']).replace(',', '\n'), va='top')
+                a.text(0.1, 0.25, 'refGene AA change: ' + str(png['info']['AAChange.refGene']).replace(',', '\n'), va='top')
             a.get_xaxis().set_visible(False)
             a.get_yaxis().set_visible(False)
             plt.tight_layout()
