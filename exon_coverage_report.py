@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 
 from matplotlib.backends.backend_pdf import PdfPages
 
-from autoprimer import Gene, get_flanking_regions, split_transcript_name
+from autoprimer import Gene, SNP, get_flanking_regions, split_transcript_name
 
 # the maximum coverage in the BAM file (too small a value can result in overflow)
 MAX_DEPTH = 1000000
@@ -55,7 +55,7 @@ def parse_coverage(samtools_depth_output, min_depth=20):
 
 def main():
     if len(sys.argv) < 5:
-        print('Usage: exon_coverage_report.py [BAM_PATH] [MIN_ROI_COVERAGE] [CDS_FLANK_BP] [GENE_NAME_1 or TRANSCRIPT_ID_1] [GENE_NAME_2 or TRANSCRIPT_ID_2]...')
+        print('Usage: exon_coverage_report.py [BAM_PATH] [MIN_ROI_COVERAGE] [CDS_FLANK_BP] [GENE_NAME_1 or TRANSCRIPT_ID_1 or SNP_1] [GENE_NAME_2 or TRANSCRIPT_ID_2 or SNP_2]...')
         sys.exit()
     # check that the BAM path exists
     assert os.path.isfile(sys.argv[1]), "BAM_PATH not valid!"
@@ -72,6 +72,8 @@ def main():
             target_type = None
             if re.search(r'-[0-9][0-9][0-9]', target):
                 target_type = 'transcript'
+            elif re.match(r'rs[0-9]+', target):
+                target_type = 'snp'
             else:
                 target_type = 'gene'
             # now retrieve gene info
@@ -83,19 +85,28 @@ def main():
                 gene_name = target
                 g = Gene(gene_name, version='GRCh37')
                 g.set_transcript()
+            elif target_type == 'snp':
+                gene_name = target
+                g = SNP(gene_name, version='GRCh37')
             else:
                 raise NotImplementedError
         
             # generate the list of coordinates
-            exons = g.list_exon_regions()
-            cdss = [g.exon_to_translated(exon) for exon in exons]
             rois = list()
-            for cds in cdss:
-                if cds[1] is None or cds[2] is None:
-                    rois.append(None)
-                    continue
-                head, tail = get_flanking_regions(cds, flank=cds_flank_bp)
-                rois.append([head, cds, tail])
+            if target_type == 'transcript' or target_type == 'gene':
+                exons = g.list_exon_regions()
+                cdss = [g.exon_to_translated(exon) for exon in exons]
+                
+                for cds in cdss:
+                    if cds[1] is None or cds[2] is None:
+                        rois.append(None)
+                        continue
+                    head, tail = get_flanking_regions(cds, flank=cds_flank_bp)
+                    rois.append([head, cds, tail])
+            else:
+                snp_site = g.get_coordinates()
+                head, tail = get_flanking_regions(snp_site, flank=cds_flank_bp)
+                rois.append([head, snp_site, tail])
         
             # determine the coverage for each region
             coverage_report = dict()
@@ -143,8 +154,12 @@ def main():
             plt.xlabel('Exon number')
             plt.xticks(ticks=x_ticks_pos, labels=x_ticks_label)
             plt.axhline(y=min_roi_coverage, color='green', linestyle='--')
-            plt.title(g.transcript_name + ' coverage report\n Sample: ' + os.path.basename(sys.argv[1]) +
-                      ' Min. depth threshold:' + str(min_roi_coverage) + 'x ' + 'Flanking: ' + str(cds_flank_bp) + 'bp')
+            if target_type == 'snp':
+                plt.title(g.name + ' coverage report\n Sample: ' + os.path.basename(sys.argv[1]) +
+                          ' Min. depth threshold:' + str(min_roi_coverage) + 'x ' + 'Flanking: ' + str(cds_flank_bp) + 'bp')
+            else: # selected transcript of a gene
+                plt.title(g.transcript_name + ' coverage report\n Sample: ' + os.path.basename(sys.argv[1]) +
+                          ' Min. depth threshold:' + str(min_roi_coverage) + 'x ' + 'Flanking: ' + str(cds_flank_bp) + 'bp')
             plt.tight_layout()
             pdf.savefig()
             plt.close()

@@ -1,26 +1,35 @@
 # -*- coding: utf-8 -*-
 """
-This script takes a list of transcript names and generates a sorted BED file.
+This script takes a list of transcript names or rs numbers and generates a sorted BED file.
 
 Usage:
-    build_bed_file.py [TRANSCRIPT-NAME-1] [TRANSCRIPT-NAME-2]
+    build_bed_file.py [TRANSCRIPT-NAME-1 or RS_1] [TRANSCRIPT-NAME-2 OR RS_2]
 """
 import argparse
 import re
 
-from autoprimer import Gene, split_transcript_name
+from autoprimer import Gene, SNP, split_transcript_name
 
-def generate_bed(transcripts, flanking=10):
+def generate_bed(identifiers, flanking=10):
     unsorted_output = list()
-    for transcript in transcripts:
-        if re.search(r'-[0-9][0-9][0-9]', transcript):
+    for identifier in identifiers:
+        if re.match(r'rs[0-9]+', identifier):
+            # use the SNP class instead
+            g = SNP(identifier, version='GRCh37')
+            unsorted_output.append(['chr' + g.chromosome,
+                                   g.start, g.end,
+                                   g.name
+                                   ]
+                                   )
+            continue
+        elif re.search(r'-[0-9][0-9][0-9]', identifier):
             # user-specified transcript
-            gene_name, transcript_number = split_transcript_name(transcript)
+            gene_name, transcript_number = split_transcript_name(identifier)
             g = Gene(gene_name, version='GRCh37')
-            g.set_transcript(transcript)
+            g.set_transcript(identifier)
         else:
             # use canonical transcript from Ensembl
-            gene_name = transcript
+            gene_name = identifier
             g = Gene(gene_name, version='GRCh37')
             g.set_transcript()
         exons = g.list_exon_regions()

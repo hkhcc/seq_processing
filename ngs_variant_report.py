@@ -22,12 +22,15 @@ def parse_vcf(vcf_path):
     """Return a list of PNG filenames and corresponding VCF lines, with a caller tag"""
     png_list = list()
     is_freebayes = False
+    is_bcftools = False
     with open(vcf_path, 'r') as f:
         variant_count = 0
         for line in f:
             if str(line).startswith('#'):
                 if str(line).startswith('##source=freeBayes'):
                     is_freebayes = True
+                elif str(line).startswith('##bcftoolsVersion'):
+                    is_bcftools = True
             else:
                 variant_count += 1
                 line = str(line).split('\t')
@@ -66,7 +69,7 @@ def parse_vcf(vcf_path):
                                 'filter': filtertag,
                                 'info': info_dict
                                 })
-    return (png_list, is_freebayes)
+    return (png_list, is_freebayes, is_bcftools)
 
 def short(string, l=15):
     """"""
@@ -82,6 +85,16 @@ def w(info_dict, key):
     else:
         return 'N.A.'
 
+def dp4(dp4_field, count):
+    """Special function to return ref/ alt count from bcftools output"""
+    ref_f, ref_r, alt_f, alt_r = dp4_field.split(',')
+    if count == 'ref':
+        return int(ref_f) + int(ref_r)
+    elif count == 'alt':
+        return int(alt_f) + int(alt_r)
+    else:
+        raise NotImplementedError
+
 
 if __name__ == "__main__":
 
@@ -91,7 +104,7 @@ if __name__ == "__main__":
 
     vcf_path = os.path.realpath(sys.argv[1])
     vcf_folder = os.path.dirname(vcf_path)
-    png_list, called_by_fb = parse_vcf(vcf_path)
+    png_list, called_by_fb, called_by_bcftools = parse_vcf(vcf_path)
 
     # create a multi-page PDF file object for writing
     with PdfPages(os.path.join(vcf_path + '.pdf')) as pdf:
@@ -117,6 +130,12 @@ if __name__ == "__main__":
                 a.text(0.1, 0.80, 'Frequency: ' + png['info']['AF']
                         + ' (' + png['info']['AO']
                         + '/' + png['info']['DP'] +
+                        ')'
+                        )
+            elif called_by_bcftools:
+                a.text(0.1, 0.80, 'Frequency: ' + png['info']['AF']
+                        + ' (' + str(dp4(png['info']['DP4'], count='ref'))
+                        + '/' + str(dp4(png['info']['DP4'], count='alt')) +
                         ')'
                         )
             else:

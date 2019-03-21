@@ -505,11 +505,47 @@ def split_transcript_name(transcript_id):
     assert gene_name + '-' + transcript_number == transcript_id, transcript_id + ' is unexpected!'
     return gene_name, transcript_number
 
+class SNP:
+    """Base container for SNP information from dbSNP/ Ensembl"""
+    def __init__(self, name, version='GRCh37'):
+        assert re.match(r'rs[0-9]+', name), name + ' is not a valid rs number!'
+        self.name = name
+        if version == 'GRCh38':
+            self.genome_version = 'GRCh38'
+        elif version == 'GRCh37': # this is the default for the SNP class
+            self.genome_version = 'GRCh37'
+        else:
+            raise ValueError(version + ' is not a supported human genome version!')
+        print('Now downloading data for', self.genome_version,
+              'SNP:', self.name, file=sys.stderr)
+        self.get_snp_info()
+        print('Finished loading data.', file=sys.stderr)
+
+    def get_snp_info(self):
+        """Get SNP info from Ensembl"""
+        if self.genome_version == 'GRCh37':
+            base_url = 'http://grch37.rest.ensembl.org/variation/human/'
+        elif self.genome_version == 'GRCh38':
+            base_url = 'http://rest.ensembl.org/variation/human/'
+            
+        url = base_url + self.name + '?content-type=application/json'
+        self.snp_info = jget(url)
+        self.chromosome, start_end = self.snp_info['mappings'][0]['location'].split(':')
+        self.start, self.end = start_end.split('-')
+        self.strand = self.snp_info['mappings'][0]['strand']
+        assert self.strand == 1, 'rs annotation on non-positive strand is not supported!'
+        return 'Info for SNP ' + self.name + ' retrieved'
+
+    def get_coordinates(self):
+        """Return the genomic coordinates"""
+        print('Returning info for', self.name, '/', self.snp_info['mappings'][0]['assembly_name'])
+        return [self.chromosome, int(self.start), int(self.end), int(self.strand)]
+
 class Gene:
     """Base container for genetic information from Ensembl"""
     def __init__(self, name, version='GRCh38'):
         self.name = str(name).upper()
-        if version == 'GRCh38':
+        if version == 'GRCh38': # this is the default for the gene class
             self.genome_version = 'GRCh38'
         elif version == 'GRCh37':
             self.genome_version = 'GRCh37'
