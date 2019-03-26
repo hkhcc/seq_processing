@@ -8,6 +8,7 @@ import atexit
 import hashlib
 import math
 import json
+import os
 import re
 import sys
 import time
@@ -18,6 +19,15 @@ import urllib.request
 debug = False
 version = '1.0k build 20190227'
 message = 'Updated SNPfree server settings'
+cache_path = 'autoprimer.cache'
+
+# check if web cache is present
+if os.path.isfile(cache_path):
+    print('# Loading web cache database from', cache_path, file=sys.stderr)
+    with open(cache_path, 'r') as infile:
+        session_data = json.load(infile)
+else:
+    session_data = dict()
 
 def print_disclaimer():
     """Print disclaimer at exit"""
@@ -27,7 +37,15 @@ def print_disclaimer():
     if debug:
         print('# Debug mode is ON')
 
+def save_cache(current_cache):
+    """Save cache at exit"""
+    print('# Saving cache to', cache_path, file=sys.stderr)
+    with open(cache_path, 'w') as outfile:
+        json.dump(current_cache, outfile)
+    print('# Saved.', file=sys.stderr)
+
 atexit.register(print_disclaimer)
+atexit.register(save_cache, session_data)
 
 def check_url(url):
     """Check server status using URL. Return HTTP status code."""
@@ -42,10 +60,15 @@ def check_url(url):
 
 def jget(url):
     """Return a dictionary of parsed JSON info from Ensembl"""
-    d = None
-    with urllib.request.urlopen(url) as response:
-        json_data = response.read().decode('ascii')
-        d = json.loads(json_data)
+    if url in session_data:
+        print('# Using cached data for', url, file=sys.stderr)
+        d = session_data[url]
+    else:
+        d = None
+        with urllib.request.urlopen(url) as response:
+            json_data = response.read().decode('ascii')
+            d = json.loads(json_data)
+        session_data[url] = d
     return d
 
 def wget(url):
@@ -527,7 +550,7 @@ class SNP:
             base_url = 'http://grch37.rest.ensembl.org/variation/human/'
         elif self.genome_version == 'GRCh38':
             base_url = 'http://rest.ensembl.org/variation/human/'
-            
+
         url = base_url + self.name + '?content-type=application/json'
         self.snp_info = jget(url)
         self.chromosome, start_end = self.snp_info['mappings'][0]['location'].split(':')
@@ -589,7 +612,7 @@ class Gene:
                     return
             raise ValueError('Canonical transcript not found!')
         # otherwise, try to set working transcript as the supplied transcript
-        else:        
+        else:
             for t in self.gene_info['Transcript']:
                 if t['display_name'] == transcript_name:
                     self.transcript_info = t
