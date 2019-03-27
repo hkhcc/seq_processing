@@ -67,7 +67,7 @@ if pipeline_index == 0:
         command += sample + ' ' # the sample name
         # now we need to determine the path of the fastq files
         files_in_dir = os.listdir(os.path.join(run_folder, sample))
-        fastq1, fastq2, gene_list = '', '', ''
+        fastq1, fastq2, gene_list, cnn_file = '', '', '', 'NONE'
         for file in files_in_dir:
             if file.endswith('1.fq.gz'):
                 fastq1 = os.path.join(run_folder, sample, file)
@@ -75,6 +75,8 @@ if pipeline_index == 0:
                 fastq2 = os.path.join(run_folder, sample, file)
             if file.endswith('.txt') and not file.endswith('multianno.txt'):
                 gene_list = os.path.join(run_folder, sample, file)
+            if file.endswith('.cnn'):
+                cnn_file = os.path.join(run_folder, sample, file)
         print('Finished loading directory content.', file=sys.stderr)
         if fastq1 == '' or fastq2 == '' or gene_list == '':
             print('Could not retrieve the required files!', file=sys.stderr)
@@ -83,7 +85,8 @@ if pipeline_index == 0:
         command += "'" + fastq2 + "' "
         command += para_list[1] + " "
         command += para_list[2] + " "
-        command += "'" + gene_list + "'"
+        command += "'" + gene_list + "' "
+        command += "'" + cnn_file + "'"
         commands.append(command)
 
 for command in commands:

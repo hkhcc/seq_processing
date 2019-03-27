@@ -14,6 +14,7 @@ echo "    BWA path: `which bwa`"
 echo "    SPEEDSEQ path: `which speedseq`"
 echo "    SAMTOOLS path: `which samtools`"
 echo "    BCFTOOLS path: `which bcftools`"
+echo "    CNVKIT path: `which cnvkit.py`"
 echo "    VARDICT (core) path: `which VarDict`"
 echo "    VARDICT (strand bias test) path: `which teststrandbias.R`"
 echo "    R path: `which R`"
@@ -75,14 +76,47 @@ else
 fi
 
 # Show the help message if the required number of arguments is not found
-if [[ $# -ne 6 ]]; then
-	echo "    Usage: $0 [SAMPLE_NAME] [FASTQ1] [FASTQ2] [COVERAGE] [FLANK_BP] [GENE_LIST_TXT]"
+if [[ $# -ne 7 ]]; then
+	echo "    Usage: $0 [SAMPLE_NAME] [FASTQ1] [FASTQ2] [COVERAGE] [FLANK_BP] [GENE_LIST_TXT] [CNVKIT_REF]"
+	echo $#
 	exit
 fi
 
 # Check the input files
 echo '# Validating inputs...'
 echo "    Sample name: $1"
+
+# Determine the sample type
+SAMPLE_TYPE='undefined'
+if [[ $1 == *"WES"* ]]; then
+	SAMPLE_TYPE='WES'
+	echo "    ..Sample type => WES"
+fi
+if [[ $1 == *"WGS"* ]]; then
+	SAMPLE_TYPE='WGS'
+	echo "    ..Sample type => WGS"
+fi
+if [[ $SAMPLE_TYPE == 'undefined' ]]; then
+	echo "    ..Sample type could not be inferred from $1!"
+        exit
+fi
+
+# Determine if CNVkit analysis should be performed
+DO_CNVKIT='undefined'
+if [[ $7 == 'NONE' ]]; then
+        DO_CNVKIT=false
+        echo "    ..CNVkit analysis will NOT be performed."
+fi
+if [[ -r $7 ]]; then
+        DO_CNVKIT=true
+	CNVREF_PATH=$7
+        echo "    ..CNVkit analysis will be performed using reference $CNVREF_PATH."
+fi
+if [[ $SAMPLE_TYPE == 'undefined' ]]; then
+	echo "    ..CNVkit analysis status could not be inferred from $7!"
+        exit
+fi
+
 echo "    FASTQ 1: $2"
 if [[ -r $2 ]]; then
 	echo "    ..File check... OK"
@@ -143,6 +177,8 @@ else
 fi
 
 # Generate BED file
+BED_100_PATH="$OUTPUT_DIR/$1.flankplus100.bed"
+PLUS_100_FLANK=$((FLANK_BP+100))
 BED_PATH="$OUTPUT_DIR/$1.bed"
 if [ -r $BED_PATH ]; then
 	echo "[Timestamp: `date`]"
@@ -150,13 +186,15 @@ if [ -r $BED_PATH ]; then
 else
 	echo '====='
 	echo "[Timestamp: `date`]"
-	echo '# Step 2: Generate BED file for variant calling...'
-	echo "# Writing output to $BED_PATH"
+	echo '# Step 2: Generate BED files for variant calling...'
+	echo "# Writing output to $BED_100_PATH and $BED_PATH"
 	GENE_STRING=`grep -v '^#'  $GENE_LIST_TXT | grep -v '^$' | tr '\r\n' '\n' | tr '\n' ' '`
+	python3 $BUILD_BED_FILE -f $PLUS_100_FLANK $GENE_STRING > $BED_100_PATH
 	python3 $BUILD_BED_FILE -f $FLANK_BP $GENE_STRING > $BED_PATH
 fi
 
 # Perform small indel and SNV calling
+PLUS_100_VCF_PATH="$OUTPUT_DIR/$1.rawplus100.vcf"
 RAW_VCF_PATH="$OUTPUT_DIR/$1.raw.vcf"
 if [ -r $RAW_VCF_PATH ]; then
 	echo "[Timestamp: `date`]"
@@ -166,7 +204,9 @@ else
 	echo "[Timestamp: `date`]"
 	echo '# Step 3: Small variant calling...'
 	echo "# Writing output to $RAW_VCF_PATH"
-	VarDict -G $UNZIP_HG19_PATH -f 0.05 -I 1000 -L 1001 -k 1 -N $1 -th 8 --dedup -b $BAM_PATH -z -c 1 -S 2 -E 3 -g 4 $BED_PATH | teststrandbias.R | var2vcf_valid.pl -N $1 -E -f 0.05 > $RAW_VCF_PATH
+	VarDict -G $UNZIP_HG19_PATH -f 0.05 -I 1000 -L 1001 -k 1 -N $1 -th 8 --dedup -b $BAM_PATH -z -c 1 -S 2 -E 3 -g 4 $BED_100_PATH | teststrandbias.R | var2vcf_valid.pl -N $1 -E -f 0.05 > $PLUS_100_VCF_PATH
+	echo '# Intersecting additionally flanked output with BED file...'
+	bedtools intersect -header -a $PLUS_100_VCF_PATH -b $BED_PATH > $RAW_VCF_PATH
 fi
 
 # Perform small indel and SNV annotation
@@ -185,7 +225,7 @@ fi
 
 # Perform SV calling
 SV_VCF_PATH="$OUTPUT_DIR/$1.sv.vcf.gz"
-RD_BED_PATH="$OUTPUT_DIR/$1.sv.$1.bam.readdepth.bed"
+
 if [ -r $SV_VCF_PATH ]; then
 	echo "[Timestamp: `date`]"
 	echo '!! File found. Skipping Step 5. !!'
@@ -194,9 +234,17 @@ else
 	echo "[Timestamp: `date`]"
 	echo '# Step 5: Structural variant calling...'
 	echo "# Writing output to $SV_VCF_PATH"
-	speedseq sv -B $BAM_PATH -S $SPLITTERS_PATH -D $DISCORDANTS_PATH -R $HG19_PATH -o $OUTPUT_DIR/$1 -x $SV_EXCLUDE_BED_PATH -t 8 -d -P
-        echo "# Intersecting region of ROI bed file with read depth SV calls..."
-        bedtools intersect -a $BED_PATH -b $RD_BED_PATH -wb > $OUTPUT_DIR/$1.ROI.SV_report.txt
+        if [[ $SAMPLE_TYPE == 'WES' ]]; then
+		# LUMPY analysis only
+		speedseq sv -B $BAM_PATH -S $SPLITTERS_PATH -D $DISCORDANTS_PATH -R $HG19_PATH -o $OUTPUT_DIR/$1 -x $SV_EXCLUDE_BED_PATH -t 8 -P
+	fi
+	if [[ $SAMPLE_TYPE == 'WGS' ]]; then
+		# LUMPY + CNVnator for WGS
+		speedseq sv -B $BAM_PATH -S $SPLITTERS_PATH -D $DISCORDANTS_PATH -R $HG19_PATH -o $OUTPUT_DIR/$1 -x $SV_EXCLUDE_BED_PATH -t 8 -d -P
+		echo "# Intersecting region of ROI bed file with read depth SV calls..."
+		RD_BED_PATH="$OUTPUT_DIR/$1.sv.$1.bam.readdepth.bed"
+		bedtools intersect -a $BED_PATH -b $RD_BED_PATH -wb > $OUTPUT_DIR/$1.ROI.SV_report.txt
+	fi
 fi
 
 # Perform IGV plotting
@@ -276,7 +324,12 @@ if [ -r "$OUTPUT_DIR/FORCECALL.snp" ]; then
 	echo 'Now performing additional IGV plotting...'
 	cd "$OUTPUT_DIR/snapshots"
 	echo "Current working directory: `pwd`"
-	$RUN_IGV_PLOTTER $1 $BAM_PATH $BED_PATH $OUTPUT_DIR/$1.FORCECALL.vcf $CONTROL_BAM_PATH $RD_BED_PATH $IGV_PATH $IGV_PLOTTER_PATH
+	if [[ $SAMPLE_TYPE == 'WGS' ]]; then
+		$RUN_IGV_PLOTTER $1 $BAM_PATH $BED_PATH $OUTPUT_DIR/$1.FORCECALL.vcf $CONTROL_BAM_PATH $RD_BED_PATH $IGV_PATH $IGV_PLOTTER_PATH
+	fi
+	if [[ $SAMPLE_TYPE == 'WES' ]]; then
+		$RUN_IGV_PLOTTER $1 $BAM_PATH $BED_PATH $OUTPUT_DIR/$1.FORCECALL.vcf $CONTROL_BAM_PATH $SV_VCF_PATH $IGV_PATH $IGV_PLOTTER_PATH
+	fi
 	cd $SCRIPT_DIR
 	echo "Current working directory: `pwd`"
 	echo 'Now performing additional reporting...'
@@ -293,14 +346,28 @@ else
 	echo "Force-call target file ($OUTPUT_DIR/FORCECALL.snp) not found. Skipping force-calling.."
 fi
 
+# Optionally, perform CNVkit analysis
+echo '====='
+echo "[Timestamp: `date`]"
+echo '# Step 10: Perform CNVkit analysis'
+if [ $DO_CNVKIT == true ] && [ -r "$CNVREF_PATH" ]; then
+	echo "CNVkit reference file found."
+	cnvkit.py batch $BAM_PATH -r $CNVREF_PATH --output-dir $OUTPUT_DIR/cnvkit -p
+	echo "# Intersecting CNVkit output with custom BED file..."
+	grep -v 'chromosome' $OUTPUT_DIR/cnvkit/$1.cnr > $OUTPUT_DIR/cnvkit/$1.noheader.cnr
+	bedtools intersect -wb -a $BED_PATH -b $OUTPUT_DIR/cnvkit/$1.noheader.cnr > $OUTPUT_DIR/cnvkit.ROI.txt
+else
+	echo "CNVkit reference file not found. Skipping CNVkit analysis.."
+fi
+
 # Generate quality statistics
 
 echo '====='
 echo "[Timestamp: `date`]"
-echo '# Step 10: Generate FastQC reports'
+echo '# Step 11: Generate FastQC reports'
 echo "# Output will be written to $OUTPUT_DIR/fastqc"
 if [ -d "$OUTPUT_DIR/fastqc" ]; then
-	echo '!! FastQC output directory found. Skipping Step 9. !!'
+	echo '!! FastQC output directory found. Skipping Step 11. !!'
 	echo "Note: Remove $OUTPUT_DIR/fastqc in order to trigger the FastQC step."
 else
 	cd $OUTPUT_DIR
@@ -316,7 +383,7 @@ fi
 
 echo '====='
 echo "[Timestamp: `date`]"
-echo '# Step 10: Generate ROI BAM files for storage'
+echo '# Step 12: Generate ROI BAM files for storage'
 echo "# Output will be written to $OUTPUT_DIR/$1.ROI.bam"
 if [ -r "$OUTPUT_DIR/$1.ROI.bam" ]; then
 	echo 'ROI BAM file found. Step 10 will be skipped.'
