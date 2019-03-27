@@ -199,6 +199,22 @@ def resolve_ambiguous_base(sample_base, reference_base):
         else:
             print('# sample_base coerced to T')
             resolved_base = 'T'
+    elif sample_base == 'M': # bug fix on 20190327, previously missing implementation
+        if reference_base == 'C':
+            resolved_base = 'A'
+        elif reference_base == 'A':
+            resolved_base = 'C'
+        else:
+            print('# sample_base coerced to C')
+            resolved_base = 'C'
+    elif sample_base == 'K': # bug fix on 20190327, previously missing implementation
+        if reference_base == 'T':
+            resolved_base = 'G'
+        elif reference_base == 'G':
+            resolved_base = 'T'
+        else:
+            print('# sample_base coerced to T')
+            resolved_base = 'T'
     else:
         print('Warning: mutatant base', sample_base, ' will be coerced to non-reference base', file=sys.stderr)
         if reference_base == 'A':
