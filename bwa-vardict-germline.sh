@@ -76,8 +76,8 @@ else
 fi
 
 # Show the help message if the required number of arguments is not found
-if [[ $# -ne 7 ]]; then
-	echo "    Usage: $0 [SAMPLE_NAME] [FASTQ1] [FASTQ2] [COVERAGE] [FLANK_BP] [GENE_LIST_TXT] [CNVKIT_REF]"
+if [[ $# -ne 8 ]]; then
+	echo "    Usage: $0 [SAMPLE_NAME] [FASTQ1] [FASTQ2] [COVERAGE] [FLANK_BP] [GENE_LIST_TXT] [CNVKIT_REF] [NUM_THREADS]"
 	echo $#
 	exit
 fi
@@ -160,6 +160,10 @@ else
 	exit
 fi
 
+# Set the number of threads
+NUM_THREADS=$8
+echo "Analysis will start using $NUM_THREADS threads"
+
 # Perform mapping
 BAM_PATH="$OUTPUT_DIR/$1.bam"
 BAI_PATH="$OUTPUT_DIR/$1.bam.bai"
@@ -173,7 +177,7 @@ else
 	echo "[Timestamp: `date`]"
 	echo '# Step 1: Mapping, deduplication and sorting...'
 	echo "# Writing output to $BAM_PATH"
-	speedseq align -R "@RG\tID:$1\tSM:$1\tLB:$1\tPL:ILMN_LIKE" -t 8 -o $OUTPUT_DIR/$1 $HG19_PATH $FASTQ1 $FASTQ2
+	speedseq align -R "@RG\tID:$1\tSM:$1\tLB:$1\tPL:ILMN_LIKE" -t $NUM_THREADS -o $OUTPUT_DIR/$1 $HG19_PATH $FASTQ1 $FASTQ2
 fi
 
 # Generate BED file
@@ -204,7 +208,7 @@ else
 	echo "[Timestamp: `date`]"
 	echo '# Step 3: Small variant calling...'
 	echo "# Writing output to $RAW_VCF_PATH"
-	VarDict -G $UNZIP_HG19_PATH -f 0.05 -I 1000 -L 1001 -k 1 -N $1 -th 8 --dedup -b $BAM_PATH -z -c 1 -S 2 -E 3 -g 4 $BED_100_PATH | teststrandbias.R | var2vcf_valid.pl -N $1 -E -f 0.05 > $PLUS_100_VCF_PATH
+	VarDict -G $UNZIP_HG19_PATH -f 0.05 -I 1000 -L 1001 -k 1 -N $1 -th $NUM_THREADS --dedup -b $BAM_PATH -z -c 1 -S 2 -E 3 -g 4 $BED_100_PATH | teststrandbias.R | var2vcf_valid.pl -N $1 -E -f 0.05 > $PLUS_100_VCF_PATH
 	echo '# Intersecting additionally flanked output with BED file...'
 	bedtools intersect -header -a $PLUS_100_VCF_PATH -b $BED_PATH > $RAW_VCF_PATH
 fi
@@ -236,7 +240,7 @@ else
 	echo "# Writing output to $SV_VCF_PATH"
         if [[ $SAMPLE_TYPE == 'WES' ]]; then
 		# LUMPY analysis only
-		speedseq sv -B $BAM_PATH -S $SPLITTERS_PATH -D $DISCORDANTS_PATH -R $HG19_PATH -o $OUTPUT_DIR/$1 -x $SV_EXCLUDE_BED_PATH -t 8 -P
+		speedseq sv -B $BAM_PATH -S $SPLITTERS_PATH -D $DISCORDANTS_PATH -R $HG19_PATH -o $OUTPUT_DIR/$1 -x $SV_EXCLUDE_BED_PATH -t $NUM_THREADS -P
 	fi
 	if [[ $SAMPLE_TYPE == 'WGS' ]]; then
 		# LUMPY + CNVnator for WGS
@@ -352,7 +356,7 @@ echo "[Timestamp: `date`]"
 echo '# Step 10: Perform CNVkit analysis'
 if [ $DO_CNVKIT == true ] && [ -r "$CNVREF_PATH" ]; then
 	echo "CNVkit reference file found."
-	cnvkit.py batch $BAM_PATH -r $CNVREF_PATH --output-dir $OUTPUT_DIR/cnvkit -p
+	cnvkit.py batch $BAM_PATH -r $CNVREF_PATH --output-dir $OUTPUT_DIR/cnvkit -p $NUM_THREADS
 	echo "# Intersecting CNVkit output with custom BED file..."
 	grep -v 'chromosome' $OUTPUT_DIR/cnvkit/$1.cnr > $OUTPUT_DIR/cnvkit/$1.noheader.cnr
 	bedtools intersect -wb -a $BED_PATH -b $OUTPUT_DIR/cnvkit/$1.noheader.cnr > $OUTPUT_DIR/cnvkit.ROI.txt
@@ -372,7 +376,7 @@ if [ -d "$OUTPUT_DIR/fastqc" ]; then
 else
 	cd $OUTPUT_DIR
 	echo "Current working directory: `pwd`"
-	fastqc -t 8 $FASTQ1 $FASTQ2
+	fastqc -t $NUM_THREADS $FASTQ1 $FASTQ2
 	mkdir fastqc
 	mv *.html *.zip ./fastqc
 	cd $SCRIPT_DIR

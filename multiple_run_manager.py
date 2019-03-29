@@ -16,7 +16,7 @@ import os
 import sys
 
 PIPELINES = ['bwa-vardict-germline.sh']
-PARAMETERS = [['Sample folder path', 'Coverage target', 'CDS flank (bp)']]
+PARAMETERS = [['Sample folder path', 'Coverage target', 'CDS flank (bp)', 'Number of threads', 'Export path']]
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -57,9 +57,12 @@ for p in required_parameters:
 print('# Now generating commands', file=sys.stderr)
 
 # the bwa-vardict-germline.sh command
+commands = []
+export_commands = []
 if pipeline_index == 0:
-    commands = []
     run_folder = para_list[0].replace("'", '').replace('"', '').rstrip()
+    num_threads = int(para_list[3])
+    export_path = para_list[4].replace("'", '').replace('"', '').rstrip()
     assert os.path.isdir(run_folder), 'Run folder ' + run_folder + ' does not exist!'
     samples = os.listdir(run_folder)
     for sample in samples:
@@ -88,9 +91,15 @@ if pipeline_index == 0:
         command += "'" + gene_list + "' "
         command += "'" + cnn_file + "'"
         commands.append(command)
+        export_command = "cp -R " + sample + " `readlink -e '" + export_path + "'`"
+        export_commands.append(export_command)
 
 for command in commands:
     print(command, file=sys.stderr)
+    os.system(command)
+
+for export_command in export_commands:
+    print(export_command, file=sys.stderr)
     os.system(command)
 
 
