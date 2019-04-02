@@ -7,11 +7,13 @@ Usage:
 """
 import argparse
 import re
+import sys
 
 from autoprimer import Gene, SNP, split_transcript_name
 
 def generate_bed(identifiers, flanking=10):
     unsorted_output = list()
+    custom_region_count = 0
     for identifier in identifiers:
         if re.match(r'rs[0-9]+', identifier):
             # use the SNP class instead
@@ -21,6 +23,14 @@ def generate_bed(identifiers, flanking=10):
                                    g.name
                                    ]
                                    )
+            continue
+        elif re.match(r'chr[0-9]+:[0-9]+', identifier):
+            custom_region_count += 1
+            chromosome, pos = identifier.split(':')
+            unsorted_output.append([chromosome,
+                                    pos, pos,
+                                    'custom_region_' + str(custom_region_count).zfill(3)
+                                    ])
             continue
         elif re.search(r'-[0-9][0-9][0-9]', identifier):
             # user-specified transcript
@@ -46,9 +56,34 @@ def generate_bed(identifiers, flanking=10):
                                         )
     return unsorted_output
 
+def get_key(region):
+    """Return the unique key generated from chromosome and start position"""
+    return region[0].replace('chr', '').zfill(2) + '-' + str(region[1]).zfill(10)
+
 def sort_regions(region_list):
-    sorted_regions = sorted(region_list, key=lambda x: x[0].replace('chr', '').zfill(2) + '-' + str(x[1]).zfill(10))
+    """Return the sorted region list"""
+    print('# Fixing and sorting intervals...', file=sys.stderr)
+    # fixes the potential issue of end > start in some indels
+    for region in region_list: 
+        if int(region[2]) < int(region[1]):
+            region[1], region[2] = region[2], region[1]
+    # actual sorting
+    sorted_regions = sorted(region_list, key=lambda x: get_key(x))
     return sorted_regions
+
+def dedup_regions(region_list):
+    """Return the deduplicated region list"""
+    print('# Deduplicating intervals...', file=sys.stderr)
+    dedup_regions = dict()
+    for region in region_list:
+        if get_key(region) in dedup_regions:
+            dedup_regions[get_key(region)][3] += ';' + region[3]
+        else:
+            dedup_regions[get_key(region)] = region
+    dedup_region_list = list()
+    for key in dedup_regions:
+        dedup_region_list.append(dedup_regions[key])
+    return dedup_region_list
 
 def main():
     parser = argparse.ArgumentParser(description='Builds a BED file from a list of provided genes/ transcripts.')
@@ -57,7 +92,8 @@ def main():
     args = parser.parse_args()
     # pass the command line arguments to the generate_bed() function
     unsorted_output = generate_bed(args.transcripts, flanking=args.cds_flank)
-    sorted_output = sort_regions(unsorted_output)
+    dedup_output = dedup_regions(unsorted_output)
+    sorted_output = sort_regions(dedup_output)
     for line in sorted_output:
         print('\t'.join([str(x) for x in line]))
 
