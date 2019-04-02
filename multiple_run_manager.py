@@ -89,9 +89,10 @@ if pipeline_index == 0:
         command += para_list[1] + " "
         command += para_list[2] + " "
         command += "'" + gene_list + "' "
-        command += "'" + cnn_file + "'"
+        command += "'" + cnn_file + "' "
+        command += str(num_threads)
         commands.append(command)
-        export_command = "cp -R " + sample + " `readlink -e '" + export_path + "'`"
+        export_command = "cp -R " + os.path.join(run_folder, sample) + " `readlink -e '" + export_path + "'`"
         export_commands.append(export_command)
 
 for command in commands:
@@ -100,7 +101,7 @@ for command in commands:
 
 for export_command in export_commands:
     print(export_command, file=sys.stderr)
-    os.system(command)
+    os.system(export_command)
 
 
 
