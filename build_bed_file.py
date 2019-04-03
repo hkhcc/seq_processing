@@ -18,14 +18,14 @@ def generate_bed(identifiers, flanking=10):
         if re.match(r'rs[0-9]+', identifier):
             # use the SNP class instead
             g = SNP(identifier, version='GRCh37')
-            if g.start == g.end:
+            if int(g.start) == int(g.end):
                 unsorted_output.append(['chr' + g.chromosome,
                                        g.start, g.start,
                                        g.name
                                        ]
                                        )
             else:
-                for pos in range(g.start, g.end + 1):
+                for pos in range(int(g.start), int(g.end) + 1):
                     unsorted_output.append(['chr' + g.chromosome,
                                            pos, pos,
                                            g.name
