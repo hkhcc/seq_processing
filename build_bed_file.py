@@ -18,11 +18,19 @@ def generate_bed(identifiers, flanking=10):
         if re.match(r'rs[0-9]+', identifier):
             # use the SNP class instead
             g = SNP(identifier, version='GRCh37')
-            unsorted_output.append(['chr' + g.chromosome,
-                                   g.start, g.end,
-                                   g.name
-                                   ]
-                                   )
+            if g.start == g.end:
+                unsorted_output.append(['chr' + g.chromosome,
+                                       g.start, g.start,
+                                       g.name
+                                       ]
+                                       )
+            else:
+                for pos in range(g.start, g.end + 1):
+                    unsorted_output.append(['chr' + g.chromosome,
+                                           pos, pos,
+                                           g.name
+                                           ]
+                                           )
             continue
         elif re.match(r'chr[0-9]+:[0-9]+', identifier):
             custom_region_count += 1
