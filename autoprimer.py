@@ -787,7 +787,7 @@ def main(args):
     ###########################################################################
     ''' SNP and repeat masking settings '''
     routine_SNP_threshold = 0.0001
-    retry_SNP_threshold = 'COMMON'
+    retry_SNP_threshold = 0.001 # alternatively, use 'COMMON' as the retry threshold
     routine_repeat_masking = 'hard'
     retry_repeat_masking = 'soft'
     ''' Amplicon size, exon-cutting and exon-combining settings '''
