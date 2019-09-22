@@ -197,6 +197,7 @@ def SNPfree_to_score(autoSNPfree_result, get_size=False):
         if rpsnp_tag_found:
             rpsnp_data = rpsnp_tag_found.group(1).split(',')
             rp_total_snps, rp_3prime_snps = int(rpsnp_data[0]), int(rpsnp_data[1])
+    
     # calculate the objective SNPfree score
     score = 100
     
@@ -207,7 +208,7 @@ def SNPfree_to_score(autoSNPfree_result, get_size=False):
             return 0
         else:
             return (primer_name, -1)
-        
+
     # non-specific priming penalty
     pri_prod_size = product_size[0]
 
@@ -232,8 +233,6 @@ def SNPfree_to_score(autoSNPfree_result, get_size=False):
     score = round(score, 1)
 
     return (primer_name, score)
-
-
 
 def get_sequence(region, mask='soft'):
     """Return the sequence as specified by region"""
