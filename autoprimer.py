@@ -199,6 +199,15 @@ def SNPfree_to_score(autoSNPfree_result, get_size=False):
             rp_total_snps, rp_3prime_snps = int(rpsnp_data[0]), int(rpsnp_data[1])
     # calculate the objective SNPfree score
     score = 100
+    
+    # added 20190922 - to handle reverse ePCR failure
+    if len(product_size) == 0:
+        print('# Reverse ePCR failure for', primer_name, file=sys.stderr)
+        if get_size:
+            return 0
+        else:
+            return (primer_name, -1)
+        
     # non-specific priming penalty
     pri_prod_size = product_size[0]
 
